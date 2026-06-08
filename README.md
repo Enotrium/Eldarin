@@ -426,11 +426,25 @@ If you use Eldarin in your research, please cite:
 }
 ```
 
+### Digital Twin & Swarm Consensus
+```bibtex
+@article{yan2026digital,
+  title={Digital twin-driven swarm of autonomous underwater vehicles for marine exploration},
+  author={Yan, Jing and Zhang, Tianyi and Guan, Xinping and Yang, Xian and Chen, Cailian},
+  journal={Communications Engineering}, volume={5}, number={1}, year={2026},
+  publisher={Nature Publishing Group}, doi={10.1038/s44172-025-00571-7}
+}
+```
+
+### Datasets
+```bibtex
+@inproceedings{zhu2021visdrone,
+  title={VisDrone-DET2021: The Vision Meets Drone Object Detection Challenge Results},
+  author={Zhu, Pengfei and others}, booktitle={ICCV Workshops}, year={2021}
+}
 @article{du2018uavdt,
   title={The Unmanned Aerial Vehicle Benchmark: Object Detection and Tracking},
-  author={Du, Dawei and others},
-  journal={ECCV},
-  year={2018}
+  author={Du, Dawei and others}, journal={ECCV}, year={2018}
 }
 ```
 
