@@ -1,0 +1,29 @@
+# Eldarin Inference Configuration
+# Used by inference.py for real-time UAV detection + 4D tracking
+
+inference:
+  conf_thresh: 0.25
+  nms_iou: 0.45
+  max_det: 300
+  track_buffer: 30
+  frame_rate: 30
+  visualize: true
+  save_video: true
+  device: "cuda:0"
+
+model:
+  name: "Eldarin-Inference"
+  visual_backbone: "resnet18"
+  pretrained: false
+  visual_dim: 1024
+  hd_dim: 8192
+  fpn_channels: 256
+  hierarchy:
+    use_vsa_binding: true
+  mixing:
+    use_uncertainty_gating: true
+  heads:
+    num_classes: 10
+    tracking:
+      state_dim: 8
+      use_hd_kalman: true

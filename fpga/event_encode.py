@@ -1,0 +1,343 @@
+"""
+FPGA Event Encoding Module
+============================
+Direct integration with FPGA-Event-Based-encode for efficient
+event data processing on FPGA fabrics.
+
+Adapted from: https://github.com/Enotrium/FPGA-Event-Based-encode
+
+Provides:
+  - Streaming event-to-frame conversion
+  - Sparse event accumulation optimized for LUT/BRAM
+  - Fixed-point quantization for HLS synthesis
+  - SNN-compatible spike generation
+
+This module is designed to be synthesized to HLS C++ for deployment
+on Xilinx/Intel FPGA platforms alongside the Eldarin SNN pipeline.
+
+Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+"""
+
+import numpy as np
+from typing import Tuple, Optional
+
+
+class StreamEventProcessor:
+    """
+    Streaming event processor for FPGA-implementable event encoding.
+
+    Simulates the FPGA dataflow:
+      Event stream → Polarity split → Spatial accumulator → Frame output
+
+    In hardware, this maps to:
+      - FIFO for incoming events
+      - Parallel X/Y decoders
+      - Dual-port BRAM for frame accumulation
+      - Fixed-point output to SNN pipeline
+    """
+
+    def __init__(
+        self,
+        height: int = 480,
+        width: int = 640,
+        num_bins: int = 5,
+        quantize_bits: int = 8,
+        frame_rate_hz: int = 30,
+    ):
+        self.height = height
+        self.width = width
+        self.num_bins = num_bins
+        self.quantize_bits = quantize_bits
+        self.frame_rate_hz = frame_rate_hz
+        self.frame_interval_us = 1e6 / frame_rate_hz
+
+        # Internal state (simulates BRAM)
+        self.pos_accumulator = np.zeros((height, width), dtype=np.int32)
+        self.neg_accumulator = np.zeros((height, width), dtype=np.int32)
+        self.current_frame = np.zeros((2, height, width), dtype=np.float32)
+
+    def process_event(self, x: int, y: int, t_us: float, polarity: int):
+        """
+        Process a single event (one cycle in FPGA).
+        Increments the appropriate accumulator at (x, y).
+        """
+        if 0 <= y < self.height and 0 <= x < self.width:
+            if polarity > 0:
+                self.pos_accumulator[y, x] += 1
+            else:
+                self.neg_accumulator[y, x] += 1
+
+    def generate_frame(self) -> np.ndarray:
+        """
+        Generate output frame from accumulators.
+        Applies log compression and quantization.
+        """
+        # Combine polarities
+        frame = np.stack([
+            self.pos_accumulator.astype(np.float32),
+            self.neg_accumulator.astype(np.float32),
+        ], axis=0)
+
+        # Log compression
+        frame = np.log1p(frame)
+
+        # Fixed-point quantization
+        max_val = 2 ** (self.quantize_bits - 1) - 1
+        frame = np.clip(np.round(frame * max_val / (np.log1p(frame.max() + 1) + 1e-6)), -max_val, max_val)
+
+        return frame
+
+    def reset_accumulators(self):
+        """Reset accumulators for next frame (active-low reset in FPGA)."""
+        self.pos_accumulator.fill(0)
+        self.neg_accumulator.fill(0)
+
+
+class FPGAEventEncoder:
+    """
+    Full FPGA event encoding pipeline.
+    Generates HLS-compatible configuration and simulates the dataflow.
+
+    HLS synthesis targets:
+      - Xilinx Vitis HLS (C++)
+      - Intel FPGA SDK for OpenCL
+      - Custom Verilog/VHDL for ultra-low-latency paths
+    """
+
+    def __init__(
+        self,
+        height: int = 480,
+        width: int = 640,
+        num_bins: int = 5,
+        quantize_bits: int = 8,
+        streaming: bool = True,
+    ):
+        self.height = height
+        self.width = width
+        self.num_bins = num_bins
+        self.quantize_bits = quantize_bits
+        self.streaming = streaming
+        self.processor = StreamEventProcessor(
+            height, width, num_bins, quantize_bits
+        )
+
+    def encode(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        t: np.ndarray,
+        p: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Encode event stream to FPGA-compatible frame(s).
+
+        Args:
+            x, y: Pixel coordinates [N]
+            t: Timestamps in microseconds [N]
+            p: Polarities [N] (+1/-1)
+
+        Returns:
+            Frame tensor [2, H, W] or [num_bins, H, W] (int8/int16)
+        """
+        # Sort by time for streaming
+        sort_idx = np.argsort(t)
+        x, y, t, p = x[sort_idx], y[sort_idx], t[sort_idx], p[sort_idx]
+
+        # Process events
+        for i in range(len(x)):
+            self.processor.process_event(x[i], y[i], t[i], p[i])
+
+        # Generate output
+        frame = self.processor.generate_frame()
+        self.processor.reset_accumulators()
+
+        return frame
+
+    def generate_hls_header(self, output_path: str) -> str:
+        """
+        Generate HLS C++ header file for the event encoding kernel.
+
+        This header can be used with Xilinx Vitis HLS to synthesize
+        the event encoding pipeline for FPGA deployment.
+        """
+        header_content = f"""// HLS Event Encoding Kernel for Eldarin
+// Auto-generated by FPGAEventEncoder
+// Reference: https://github.com/Enotrium/FPGA-Event-Based-encode
+
+#pragma once
+
+#include <ap_int.h>
+#include <hls_stream.h>
+
+// Configuration constants
+#define IMG_HEIGHT {self.height}
+#define IMG_WIDTH {self.width}
+#define QUANTIZE_BITS {self.quantize_bits}
+#define MAX_EVENTS_PER_FRAME 100000
+
+// Data types
+typedef ap_int<QUANTIZE_BITS> event_data_t;
+typedef ap_uint<10> coord_t;      // Up to 1024 pixels
+typedef ap_uint<32> time_us_t;
+typedef ap_int<1> polarity_t;
+
+// Event struct (streamed via AXI-Stream)
+struct EventData {{
+    coord_t x;
+    coord_t y;
+    time_us_t t;
+    polarity_t p;
+}};
+
+// Output frame (memory-mapped via AXI-Lite)
+struct EventFrame {{
+    event_data_t pos_frame[IMG_HEIGHT][IMG_WIDTH];
+    event_data_t neg_frame[IMG_HEIGHT][IMG_WIDTH];
+}};
+
+// Top-level function for HLS synthesis
+void event_encode_top(
+    hls::stream<EventData> &event_stream,
+    EventFrame *output_frame,
+    ap_uint<32> num_events
+);
+
+// Internal accumulator
+void accumulate_events(
+    hls::stream<EventData> &stream,
+    ap_int<16> pos_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_int<16> neg_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_uint<32> num
+);
+
+// Log compression and quantization
+void compress_and_quantize(
+    ap_int<16> pos_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_int<16> neg_acc[IMG_HEIGHT][IMG_WIDTH],
+    EventFrame *output
+);
+"""
+
+        with open(output_path, 'w') as f:
+            f.write(header_content)
+
+        return header_content
+
+    def generate_hls_implementation(self, output_path: str) -> str:
+        """
+        Generate HLS C++ implementation file.
+        """
+        impl_content = f"""// HLS Event Encoding Implementation
+// Reference: https://github.com/Enotrium/FPGA-Event-Based-encode
+
+#include "event_encode.h"
+#include <cmath>
+
+void event_encode_top(
+    hls::stream<EventData> &event_stream,
+    EventFrame *output_frame,
+    ap_uint<32> num_events
+) {{
+    #pragma HLS INTERFACE axis port=event_stream
+    #pragma HLS INTERFACE m_axi port=output_frame offset=slave bundle=gmem
+    #pragma HLS INTERFACE s_axilite port=num_events
+    #pragma HLS INTERFACE s_axilite port=return
+
+    static ap_int<16> pos_acc[IMG_HEIGHT][IMG_WIDTH];
+    static ap_int<16> neg_acc[IMG_HEIGHT][IMG_WIDTH];
+
+    #pragma HLS ARRAY_PARTITION variable=pos_acc cyclic factor=8 dim=2
+    #pragma HLS ARRAY_PARTITION variable=neg_acc cyclic factor=8 dim=2
+
+    // Reset accumulators
+    RESET_LOOP:
+    for (int y = 0; y < IMG_HEIGHT; y++) {{
+        for (int x = 0; x < IMG_WIDTH; x++) {{
+            #pragma HLS PIPELINE II=1
+            pos_acc[y][x] = 0;
+            neg_acc[y][x] = 0;
+        }}
+    }}
+
+    // Accumulate events
+    accumulate_events(event_stream, pos_acc, neg_acc, num_events);
+
+    // Compress and quantize
+    compress_and_quantize(pos_acc, neg_acc, output_frame);
+}}
+
+void accumulate_events(
+    hls::stream<EventData> &stream,
+    ap_int<16> pos_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_int<16> neg_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_uint<32> num
+) {{
+    ACCUM_LOOP:
+    for (ap_uint<32> i = 0; i < num; i++) {{
+        #pragma HLS PIPELINE II=1
+        EventData evt = stream.read();
+
+        if (evt.x < IMG_WIDTH && evt.y < IMG_HEIGHT) {{
+            if (evt.p) {{
+                pos_acc[evt.y][evt.x] += 1;
+            }} else {{
+                neg_acc[evt.y][evt.x] += 1;
+            }}
+        }}
+    }}
+}}
+
+void compress_and_quantize(
+    ap_int<16> pos_acc[IMG_HEIGHT][IMG_WIDTH],
+    ap_int<16> neg_acc[IMG_HEIGHT][IMG_WIDTH],
+    EventFrame *output
+) {{
+    QUANT_LOOP:
+    for (int y = 0; y < IMG_HEIGHT; y++) {{
+        for (int x = 0; x < IMG_WIDTH; x++) {{
+            #pragma HLS PIPELINE II=1
+            // Log compression: log(1 + val)
+            float pos_val = hls::logf(1.0f + (float)pos_acc[y][x]);
+            float neg_val = hls::logf(1.0f + (float)neg_acc[y][x]);
+
+            // Quantize to fixed-point
+            ap_int<QUANTIZE_BITS> pos_q = (ap_int<QUANTIZE_BITS>)(pos_val);
+            ap_int<QUANTIZE_BITS> neg_q = (ap_int<QUANTIZE_BITS>)(neg_val);
+
+            output->pos_frame[y][x] = pos_q;
+            output->neg_frame[y][x] = neg_q;
+        }}
+    }}
+}}
+"""
+
+        with open(output_path, 'w') as f:
+            f.write(impl_content)
+
+        return impl_content
+
+
+def generate_fpga_kernel(
+    height: int = 480,
+    width: int = 640,
+    quantize_bits: int = 8,
+    output_dir: str = "fpga/hls_kernels",
+):
+    """Generate complete HLS kernel files for FPGA synthesis."""
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    encoder = FPGAEventEncoder(height, width, quantize_bits=quantize_bits)
+
+    header = encoder.generate_hls_header(f"{output_dir}/event_encode.h")
+    impl = encoder.generate_hls_implementation(f"{output_dir}/event_encode.cpp")
+
+    print(f"HLS kernel files generated in {output_dir}/")
+    print(f"  - event_encode.h")
+    print(f"  - event_encode.cpp")
+    print(f"\nTo synthesize with Vitis HLS:")
+    print(f"  vitis_hls -f scripts/synthesize_event_encode.tcl")
+
+
+if __name__ == "__main__":
+    generate_fpga_kernel()

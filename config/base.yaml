@@ -1,0 +1,143 @@
+# Eldarin Base Configuration
+# Adapted from VioPose hierarchical multimodal architecture
+# All paths and hyperparameters are configurable
+
+model:
+  name: "Eldarin"
+  # Encoder dimensions
+  visual_dim: 1024          # RGB frame encoder output dim
+  event_dim: 512            # Event stream encoder output dim
+  audio_dim: 512            # Audio encoder output dim
+  imu_dim: 128              # IMU encoder output dim
+
+  # VSA/HDC hyperdimensional settings
+  hd_dim: 8192              # Hyperdimensional vector dimension
+  hd_dtype: "bipolar"       # "binary" or "bipolar"
+  vsa_binding: "circular"   # "circular" (Fourier holographic) or "xor"
+  hd_similarity: "cosine"   # "cosine" or "hamming"
+
+  # Hierarchy module (cascading high->low features)
+  hierarchy:
+    num_levels: 4
+    level_dims: [2048, 1024, 512, 256]
+    dropout: 0.1
+    use_vsa_binding: true   # Enable VSA/HDC binding between levels
+
+  # Mixing module (Bayesian-style cross-modal)
+  mixing:
+    num_iterations: 3       # Bayesian update iterations
+    use_uncertainty_gating: true
+    temporal_window: 16     # Frames for temporal mixing
+    prior_weight: 0.7       # Prior weight in Bayesian update
+
+  # Detection + Tracking heads
+  heads:
+    num_classes: 10         # Object classes (VisDrone: 10)
+    detection:
+      type: "yolo"          # "yolo" or "detr" style
+      anchors: 3
+      anchor_scales: [[10,13], [16,30], [33,23], [30,61], [62,45], [59,119], [116,90], [156,198], [373,326]]
+    tracking:
+      state_dim: 8          # x,y,z,dx,dy,dz,vx,vy (3D+velocity)
+      use_hd_kalman: true   # Hyperdimensional Kalman filter
+      association: "hungarian"  # Hungarian / greedy
+      max_age: 30           # Tracklet max age
+      min_hits: 3           # Min detections to confirm track
+
+  # SNN config
+  snn:
+    enabled: false
+    timesteps: 100
+    neuron_type: "LIF"      # LIF or IF
+    threshold: 1.0
+    leak: 0.9
+
+data:
+  # Dataset
+  dataset: "visdrone"
+  data_root: "/path/to/dataset"
+  modalities: ["rgb"]       # "rgb", "event", "audio", "imu"
+
+  # Image settings
+  img_size: [640, 640]
+  rgb_channels: 3
+
+  # Event settings
+  event_window_us: 10000   # 10ms event accumulation window
+  event_representation: "voxel_grid"  # "voxel_grid" or "event_frame"
+
+  # Audio settings
+  audio_sample_rate: 22050
+  audio_window_ms: 100
+
+  # Augmentation
+  augment:
+    mosaic: 0.5
+    mixup: 0.1
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0
+    translate: 0.1
+    scale: 0.5
+    shear: 2.0
+    perspective: 0.0
+    flip_ud: 0.0
+    flip_lr: 0.5
+
+  # Dataloader
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+
+training:
+  epochs: 100
+  warmup_epochs: 5
+  lr: 0.001
+  lr_scheduler: "cosine"   # cosine, step, plateau
+  weight_decay: 0.0005
+  momentum: 0.937
+  gradient_clip: 10.0
+
+  # Loss weights
+  loss:
+    box: 7.5               # Bounding box loss
+    cls: 0.5               # Classification loss
+    obj: 1.0               # Objectness loss
+    track: 2.0             # Tracking/trajectory loss
+    vsa_consistency: 0.1   # VSA/HDC consistency loss
+    temporal_smooth: 0.5   # Temporal smoothness
+
+  # Mixed precision
+  amp: true
+
+  # Checkpointing
+  save_interval: 5
+  save_best: true
+  eval_interval: 1
+
+evaluation:
+  metrics: ["mAP", "MOTA", "MOTP", "IDF1", "HOTA"]
+  iou_thresh: 0.5
+  conf_thresh: 0.001
+  nms_iou: 0.6
+  max_det: 500
+
+inference:
+  conf_thresh: 0.25
+  nms_iou: 0.45
+  max_det: 300
+  track_buffer: 30
+  frame_rate: 30
+  visualize: true
+  save_video: true
+  device: "cuda:0"
+
+fpga_export:
+  precision: "int8"        # fp16 / int8
+  hd_dim_hw: 4096          # Hardware VSA dimension (smaller)
+  clock_mhz: 200
+  target_fps: 60
+  platform: "xilinx"       # xilinx / intel / versal
+  hls_synthesis: true
+  snn_conversion: true

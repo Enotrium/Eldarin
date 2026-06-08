@@ -1,0 +1,47 @@
+# Eldarin FPGA Export Configuration
+# For converting trained models to FPGA-compatible formats
+#
+# References:
+#   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
+#   arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1
+
+fpga_export:
+  precision: "int8"
+  hd_dim_hw: 4096
+  clock_mhz: 200
+  target_fps: 60
+  platform: "xilinx"
+  hls_synthesis: true
+  snn_conversion: true
+
+model:
+  name: "Eldarin-FPGA"
+  visual_backbone: "resnet18"
+  pretrained: false  # Weights loaded from checkpoint
+  visual_dim: 512
+  event_dim: 256
+  hd_dim: 4096
+  fpn_channels: 128
+  snn:
+    enabled: true
+    timesteps: 100
+    neuron_type: "LIF"
+    threshold: 1.0
+    leak: 0.9
+
+  hierarchy:
+    num_levels: 3
+    level_dims: [1024, 512, 256]
+    use_vsa_binding: true
+
+  mixing:
+    num_iterations: 2
+    use_uncertainty_gating: true
+
+  heads:
+    num_classes: 10
+    detection:
+      type: "yolo"
+    tracking:
+      state_dim: 8
+      use_hd_kalman: true

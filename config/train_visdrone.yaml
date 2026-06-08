@@ -1,0 +1,72 @@
+# Eldarin VisDrone Training Configuration
+# Based on config/base.yaml with VisDrone-specific settings
+#
+# VisDrone: https://github.com/VisDrone/VisDrone-Dataset
+# VioPose: https://github.com/SeongJong-Yoo/VioPose
+
+model:
+  name: "Eldarin-VisDrone"
+  visual_backbone: "resnet18"
+  pretrained: true
+  visual_dim: 1024
+  event_dim: 512
+  audio_dim: 512
+  imu_dim: 128
+  hd_dim: 8192
+  fpn_channels: 256
+  hierarchy:
+    num_levels: 4
+    level_dims: [2048, 1024, 512, 256]
+    use_vsa_binding: true
+    dropout: 0.1
+  mixing:
+    num_iterations: 3
+    use_uncertainty_gating: true
+    temporal_window: 16
+    prior_weight: 0.7
+  heads:
+    num_classes: 10  # VisDrone: 10 classes (excluding ignored)
+    detection:
+      type: "yolo"
+      anchors: 3
+    tracking:
+      state_dim: 8
+      use_hd_kalman: true
+      max_age: 30
+      min_hits: 3
+
+data:
+  dataset: "visdrone"
+  modalities: ["rgb"]
+  img_size: [640, 640]
+  batch_size: 8
+  num_workers: 4
+  augment:
+    mosaic: 0.5
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    flip_lr: 0.5
+
+training:
+  epochs: 100
+  warmup_epochs: 5
+  lr: 0.001
+  weight_decay: 0.0005
+  momentum: 0.937
+  gradient_clip: 10.0
+  amp: true
+  loss:
+    box: 7.5
+    cls: 0.5
+    obj: 1.0
+    track: 2.0
+    vsa_consistency: 0.1
+    temporal_smooth: 0.5
+  save_interval: 5
+  eval_interval: 1
+
+evaluation:
+  metrics: ["mAP", "MOTA", "MOTP", "IDF1"]
+  iou_thresh: 0.5
+  nms_iou: 0.6

@@ -1,0 +1,73 @@
+# Eldarin Multi-Modal Training Configuration
+# RGB + Event + Audio + IMU fusion for UAV 4D tracking
+#
+# Integrations:
+#   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
+#   arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1
+#   VioPose: https://github.com/SeongJong-Yoo/VioPose
+
+model:
+  name: "Eldarin-Multimodal"
+  visual_backbone: "resnet18"
+  pretrained: true
+  visual_dim: 1024
+  event_dim: 512
+  audio_dim: 512
+  imu_dim: 128
+  pose_dim: 128
+  hd_dim: 8192
+  fpn_channels: 256
+
+  event:
+    height: 480
+    width: 640
+    representation: "voxel_grid"
+    num_bins: 10
+
+  audio:
+    sample_rate: 22050
+
+  hierarchy:
+    num_levels: 4
+    level_dims: [2048, 1024, 512, 256]
+    use_vsa_binding: true
+    dropout: 0.1
+
+  mixing:
+    num_iterations: 5
+    use_uncertainty_gating: true
+    temporal_window: 32
+    prior_weight: 0.6
+
+  heads:
+    num_classes: 10
+    detection:
+      type: "yolo"
+    tracking:
+      state_dim: 8
+      use_hd_kalman: true
+      max_age: 30
+      min_hits: 3
+
+data:
+  dataset: "visdrone"
+  modalities: ["rgb", "event", "audio", "imu"]
+  img_size: [640, 640]
+  batch_size: 4
+  num_workers: 4
+  event_window_us: 10000
+
+training:
+  epochs: 150
+  warmup_epochs: 5
+  lr: 0.0005
+  weight_decay: 0.0005
+  gradient_clip: 10.0
+  amp: true
+  loss:
+    box: 7.5
+    cls: 0.5
+    obj: 1.0
+    track: 2.0
+    vsa_consistency: 0.2
+    temporal_smooth: 0.5

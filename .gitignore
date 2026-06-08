@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Generated images/figures (large binaries)
+images/*.png
+images/*.webp
+figures/*.html
+
+# Checkpoints
+checkpoints/*.pth
+checkpoints/*.onnx
+checkpoints/*.engine
+
+# Data
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Logs
+*.log
+wandb/
