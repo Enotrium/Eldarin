@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figure 4: Digital Twin Framework — Eldarin</title>
+<style>
+:root { --figure-width: 1100px; }
+
+:root {
+    --bg: #ffffff;
+    --text: #222222;
+    --text-secondary: #6f6f6f;
+    --border: #d5d5d5;
+    --accent: #025e8d;
+    --accent-hover: #069;
+    --code-bg: #f5f5f5;
+    --rgb: #E74C3C;
+    --event: #d2991d;
+    --audio: #3498DB;
+    --imu: #2ECC71;
+    --vsa: #8e44ad;
+    --twin: #16a085;
+    --swarm: #27ae60;
+    --fpga: #00aa41;
+    --detection: #e67e22;
+    --tracking: #c0392b;
+    --surface: #ecf0f1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: var(--figure-width);
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    font-size: 14px;
+}
+
+/* Figure header */
+.figure-header {
+    border-bottom: 3px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.figure-number {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.figure-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.figure-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* SVG container */
+.figure-canvas {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.figure-canvas svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Tooltip */
+.tooltip {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    max-width: 340px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip.visible { display: block; }
+
+.tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--accent);
+}
+
+/* Caption */
+.figure-caption {
+    margin-top: 16px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+
+.caption-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+/* Navigation */
+.figure-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.nav-btn:hover {
+    background: #f0f6fc;
+    border-color: var(--accent);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.figure-index {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Bibliography */
+.figure-cite {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* Grid background in SVG */
+.grid-bg { fill: #f8f9fa; }
+
+/* Hoverable groups */
+.hoverable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.hoverable:hover {
+    filter: brightness(0.95);
+}
+
+.hoverable:hover + .tooltip,
+.hoverable:focus + .tooltip {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body { padding: 12px 16px 24px; font-size: 13px; }
+    .figure-title { font-size: 18px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- Tooltip overlay -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Figure Header -->
+<div class="figure-header">
+    <div class="figure-number">Figure 4</div>
+    <h1 class="figure-title">Digital Twin Framework</h1>
+    <div class="figure-subtitle">Virtual-Physical Synchronization in HD Space (Yan et al. 2026)</div>
+</div>
+
+<!-- SVG Canvas -->
+<div class="figure-canvas">
+<svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" style="max-width:1100px">
+<rect width="1100" height="650" fill="#f8f9fa"/>
+<rect x="30" y="30" width="300" height="240" rx="6" fill="#e67e22" fill-opacity="0.08" stroke="#e67e22" stroke-width="1.5" class="hoverable"/>
+<text x="180.0" y="147.0" fill="#e67e22" font_size="14px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Physical World</text>
+<text x="180.0" y="163.0" fill="#6f6f6f" font_size="10px" text_anchor="middle">UAV + Multi-Sensor Observations</text>
+<text x="45" y="68" fill="#6f6f6f" font_size="12" font_family="monospace">• RGB Camera Stream</text>
+<text x="45" y="90" fill="#6f6f6f" font_size="12" font_family="monospace">• Event Camera Stream</text>
+<text x="45" y="112" fill="#6f6f6f" font_size="12" font_family="monospace">• Audio Microphone</text>
+<text x="45" y="134" fill="#6f6f6f" font_size="12" font_family="monospace">• IMU / GPS / Pose</text>
+<text x="45" y="156" fill="#6f6f6f" font_size="12" font_family="monospace">• Detected Objects (BBox, Class)</text>
+<text x="45" y="178" fill="#6f6f6f" font_size="12" font_family="monospace">• Ego-motion estimate</text>
+<rect x="750" y="30" width="300" height="240" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="900.0" y="147.0" fill="#16a085" font_size="14px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Digital Twin (HD Space)</text>
+<text x="900.0" y="163.0" fill="#6f6f6f" font_size="10px" text_anchor="middle">Virtual Replica + Predictive Model</text>
+<text x="765" y="68" fill="#6f6f6f" font_size="12" font_family="monospace">• Ego-UAV State HD Vector</text>
+<text x="765" y="90" fill="#6f6f6f" font_size="12" font_family="monospace">• Object Slot Memory (64 slots)</text>
+<text x="765" y="112" fill="#6f6f6f" font_size="12" font_family="monospace">• Environment Context Vector</text>
+<text x="765" y="134" fill="#6f6f6f" font_size="12" font_family="monospace">• Comm Graph State</text>
+<text x="765" y="156" fill="#6f6f6f" font_size="12" font_family="monospace">• Predictive: twin(t+1) ≈ ρ(twin(t))</text>
+<defs>
+        <marker id="arrow_185567504784960117" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#e67e22"/>
+        </marker>
+    </defs><line x1="340" y1="120" x2="740" y2="120" stroke="#e67e22" stroke-width="2.5" marker-end="url(#arrow_185567504784960117)" opacity="0.6"/>
+<text x="540" y="108" fill="#e67e22" font_size="11" font_weight="bold" text_anchor="middle">Synchronize (encode → bundle)</text>
+<defs>
+        <marker id="arrow_7981783946083388592" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#16a085"/>
+        </marker>
+    </defs><line x1="740" y1="170" x2="340" y2="170" stroke="#16a085" stroke-width="2.5" marker-end="url(#arrow_7981783946083388592)" opacity="0.6"/>
+<text x="540" y="188" fill="#16a085" font_size="11" font_weight="bold" text_anchor="middle">Predict (permute → forecast)</text>
+<text x="540" y="230" fill="#222" font_size="13" font_weight="bold" text_anchor="middle" font_family="monospace">Bayesian Update: posterior = α·prior ⊕ (1-α)·likelihood</text>
+<text x="540" y="300" fill="#222" font_size="14" font_weight="bold" text_anchor="middle">Slot-Based HD Memory (Role-Filler Binding)</text>
+<rect x="80" y="320" width="110" height="50" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="135.0" y="349.0" fill="#16a085" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Slot 0: Ego</text>
+<rect x="210" y="320" width="110" height="50" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="265.0" y="349.0" fill="#16a085" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Slot 1: Obj A</text>
+<rect x="340" y="320" width="110" height="50" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="395.0" y="349.0" fill="#16a085" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Slot 2: Obj B</text>
+<rect x="470" y="320" width="110" height="50" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="525.0" y="349.0" fill="#16a085" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Slot 3: Obj C</text>
+<rect x="600" y="320" width="110" height="50" rx="6" fill="#bbb" fill-opacity="0.08" stroke="#bbb" stroke-width="1.5" class="hoverable"/>
+<text x="655.0" y="349.0" fill="#bbb" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">...</text>
+<rect x="730" y="320" width="110" height="50" rx="6" fill="#bbb" fill-opacity="0.08" stroke="#bbb" stroke-width="1.5" class="hoverable"/>
+<text x="785.0" y="349.0" fill="#bbb" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Slot 63: Free</text>
+<text x="540" y="400" fill="#16a085" font_size="11" text_anchor="middle" font_family="monospace">Retrieval: unbind(slot_state, role) ≈ object_state  (robust to partial corruption of HD vector)</text>
+<rect x="30" y="440" width="500" height="100" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="280.0" y="494.0" fill="#025e8d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Synchronization Processing</text>
+<text x="45" y="470" fill="#444" font_size="10" font_family="monospace">1. Encode physical observation to HD via VSAHDC.encode()</text>
+<text x="45" y="488" fill="#444" font_size="10" font_family="monospace">2. Bind with role vector: ego_role ⊗ ego_state_hd</text>
+<text x="45" y="506" fill="#444" font_size="10" font_family="monospace">3. Bundles update: new_twin = sync_decay · old_twin + (1-sync_decay) · new_bundle</text>
+<text x="45" y="524" fill="#444" font_size="10" font_family="monospace">4. Virtual prediction: future_twin = permute(twin, steps=1)</text>
+<rect x="580" y="440" width="460" height="100" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="810.0" y="494.0" fill="#025e8d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Confidence &amp; Uncertainty</text>
+<text x="595" y="470" fill="#444" font_size="10" font_family="monospace">• Sensor Health: [0-1] continuous confidence</text>
+<text x="595" y="488" fill="#444" font_size="10" font_family="monospace">• Uncertainty Gate: sigmoid(FC(features)) → weight</text>
+<text x="595" y="506" fill="#444" font_size="10" font_family="monospace">• Low confidence → rely more on virtual twin prediction</text>
+<text x="595" y="524" fill="#444" font_size="10" font_family="monospace">• High confidence → trust physical observation primarily</text>
+</svg>
+</div>
+
+<!-- Caption -->
+<div class="figure-caption">
+    <span class="caption-label">Figure 4.</span>
+    The digital twin maintains a synchronized hyperdimensional (8192-dim) virtual replica of the physical UAV and tracked objects. Slot-based HD memory uses role-filler binding for structured storage and efficient retrieval. Predictive forward model uses HD permutation: twin(t+1) ≈ ρ(twin(t)). Bayesian updates fuse physical observations with virtual predictions.
+</div>
+
+<!-- Bibliographic Data -->
+<div class="figure-cite">
+<strong>Related Work — Cite as:</strong><br>
+Yan, J., Zhang, T., Guan, X., Yang, X. & Chen, C. (2026).
+Digital twin-driven swarm of autonomous underwater vehicles for marine exploration.
+<em>Communications Engineering</em>, <strong>5</strong>, Article number from
+<a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
+<br><br>
+<strong>Eldarin Framework:</strong><br>
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
+FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
+arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
+</div>
+
+<!-- Navigation -->
+<div class="figure-nav">
+    <a class="nav-btn " href="fig_03.html">← Previous</a>
+    <span class="figure-index">Figure 4 of 10</span>
+    <a class="nav-btn " href="fig_05.html">Next →</a>
+</div>
+
+<!-- Tooltip script -->
+<script>
+(function() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.hoverable').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            tooltip.classList.add('visible');
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+            tooltip.innerHTML = '<div class="tooltip-title">' + (el.getAttribute('data-title') || '') + '</div>' +
+                               '<div>' + (el.getAttribute('data-desc') || '') + '</div>';
+        });
+        el.addEventListener('mousemove', e => {
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figure 7: Communication-Aware Digital Twin Adaptation — Eldarin</title>
+<style>
+:root { --figure-width: 1100px; }
+
+:root {
+    --bg: #ffffff;
+    --text: #222222;
+    --text-secondary: #6f6f6f;
+    --border: #d5d5d5;
+    --accent: #025e8d;
+    --accent-hover: #069;
+    --code-bg: #f5f5f5;
+    --rgb: #E74C3C;
+    --event: #d2991d;
+    --audio: #3498DB;
+    --imu: #2ECC71;
+    --vsa: #8e44ad;
+    --twin: #16a085;
+    --swarm: #27ae60;
+    --fpga: #00aa41;
+    --detection: #e67e22;
+    --tracking: #c0392b;
+    --surface: #ecf0f1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: var(--figure-width);
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    font-size: 14px;
+}
+
+/* Figure header */
+.figure-header {
+    border-bottom: 3px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.figure-number {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.figure-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.figure-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* SVG container */
+.figure-canvas {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.figure-canvas svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Tooltip */
+.tooltip {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    max-width: 340px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip.visible { display: block; }
+
+.tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--accent);
+}
+
+/* Caption */
+.figure-caption {
+    margin-top: 16px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+
+.caption-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+/* Navigation */
+.figure-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.nav-btn:hover {
+    background: #f0f6fc;
+    border-color: var(--accent);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.figure-index {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Bibliography */
+.figure-cite {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* Grid background in SVG */
+.grid-bg { fill: #f8f9fa; }
+
+/* Hoverable groups */
+.hoverable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.hoverable:hover {
+    filter: brightness(0.95);
+}
+
+.hoverable:hover + .tooltip,
+.hoverable:focus + .tooltip {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body { padding: 12px 16px 24px; font-size: 13px; }
+    .figure-title { font-size: 18px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- Tooltip overlay -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Figure Header -->
+<div class="figure-header">
+    <div class="figure-number">Figure 7</div>
+    <h1 class="figure-title">Communication-Aware Digital Twin Adaptation</h1>
+    <div class="figure-subtitle">Link quality vs. modality weighting and virtual model reliance</div>
+</div>
+
+<!-- SVG Canvas -->
+<div class="figure-canvas">
+<svg viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg" style="max-width:1100px">
+<rect width="1100" height="700" fill="#f8f9fa"/>
+<rect x="30" y="30" width="500" height="280" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="280.0" y="174.0" fill="#025e8d" font_size="8px" font_weight="bold" text_anchor="middle" dominant_baseline="middle"></text>
+<rect x="30" y="30" width="500" height="280" fill="#fff" stroke="#d5d5d5" stroke-width="1" rx="4"/>
+<text x="280.0" y="48" fill="#222" font_size="12" font_weight="bold" text_anchor="middle">Communication Link Quality</text>
+<text x="42" y="170.0" fill="#6f6f6f" font_size="9" text_anchor="middle" transform="rotate(-90, 42, 170.0)">Link Quality</text>
+<path d="M 80,175.0 L 80.0,196.93978691559 L 94.33333333333333,173.47094110324824 L 108.66666666666667,157.3649089516015 L 123.0,120.82464972037329 L 137.33333333333334,127.35166384113921 L 151.66666666666669,141.97345641819467 L 166.0,115.81833522858165 L 180.33333333333331,136.13063639845475 L 194.66666666666669,105.07357070541212 L 209.0,124.42169472040936 L 223.33333333333334,123.79221412802374 L 237.66666666666666,113.26479533363838 L 252.0,150.96324815702772 L 266.33333333333337,161.4255302490652 L 280.66666666666663,162.44957361901453 L 295.0,154.94424274983547 L 309.33333333333337,195.82899311506955 L 323.66666666666663,222.26340274481436 L 338.0,205.63325236115747 L 352.3333333333333,203.83680953023077 L 366.6666666666667,204.71313335820935 L 381.0,230.44196257776338 L 395.3333333333333,234.44852523048118 L 409.6666666666667,218.8673742649831 L 424.0,253.78149455455818 L 438.3333333333333,234.60613470773507 L 452.6666666666667,223.60876796977067 L 467.0,214.26794273969136 L 481.3333333333333,217.16060864935366 L 495.6666666666667,201.31855368167388" fill="none" stroke="#16a085" stroke-width="2"/>
+<line x1="80" y1="221.0" x2="510" y2="221.0" stroke="#c0392b" stroke_width="1" stroke_dasharray="4,4"/>
+<text x="490" y="233.0" fill="#c0392b" font_size="8" text_anchor="end">Degradation threshold</text>
+<rect x="560" y="30" width="500" height="280" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="810.0" y="174.0" fill="#025e8d" font_size="8px" font_weight="bold" text_anchor="middle" dominant_baseline="middle"></text>
+<rect x="560" y="30" width="500" height="280" fill="#fff" stroke="#d5d5d5" stroke-width="1" rx="4"/>
+<text x="810.0" y="48" fill="#222" font_size="12" font_weight="bold" text_anchor="middle">Adaptive Modality Weighting</text>
+<text x="572" y="170.0" fill="#6f6f6f" font_size="9" text_anchor="middle" transform="rotate(-90, 572, 170.0)">Weight</text>
+<rect x="606.0" y="140.5" width="9" height="149.5" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="606.0" y="60" width="9" height="80.5" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="620.3333333333334" y="134.78825673964198" width="9" height="155.21174326035802" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="620.3333333333334" y="60" width="9" height="74.78825673964198" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="634.6666666666666" y="129.3042226586263" width="9" height="160.6957773413737" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="634.6666666666666" y="60" width="9" height="69.30422265862629" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="649.0" y="124.26652888989273" width="9" height="165.73347111010727" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="649.0" y="60" width="9" height="64.26652888989273" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="663.3333333333334" y="119.87601238663873" width="9" height="170.12398761336127" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="663.3333333333334" y="60" width="9" height="59.87601238663873" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="677.6666666666666" y="116.30770918677297" width="9" height="173.69229081322703" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="677.6666666666666" y="60" width="9" height="56.30770918677296" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="692.0" y="113.70387627844224" width="9" height="176.29612372155776" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="692.0" y="60" width="9" height="53.70387627844222" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="706.3333333333334" y="112.16832026283177" width="9" height="177.83167973716823" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="706.3333333333334" y="60" width="9" height="52.16832026283177" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="720.6666666666666" y="111.76225891255672" width="9" height="178.23774108744328" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="720.6666666666666" y="60" width="9" height="51.76225891255671" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="735.0" y="112.50188061225188" width="9" height="177.49811938774812" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="735.0" y="60" width="9" height="52.50188061225188" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="749.3333333333334" y="114.35769897876165" width="9" height="175.64230102123835" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="749.3333333333334" y="60" width="9" height="54.35769897876164" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="763.6666666666666" y="117.25572839018679" width="9" height="172.7442716098132" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="763.6666666666666" y="60" width="9" height="57.25572839018678" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="778.0" y="121.08043355915441" width="9" height="168.91956644084559" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="778.0" y="60" width="9" height="61.080433559154415" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="792.3333333333334" y="125.6793355601329" width="9" height="164.3206644398671" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="792.3333333333334" y="60" width="9" height="65.67933556013291" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="806.6666666666666" y="130.8690906830177" width="9" height="159.1309093169823" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="806.6666666666666" y="60" width="9" height="70.86909068301772" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="821.0" y="136.4427997682788" width="9" height="153.5572002317212" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="821.0" y="60" width="9" height="76.4427997682788" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="835.3333333333334" y="142.17825662354295" width="9" height="147.82174337645705" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="835.3333333333334" y="60" width="9" height="82.17825662354294" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="849.6666666666666" y="147.8468066832714" width="9" height="142.1531933167286" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="849.6666666666666" y="60" width="9" height="87.8468066832714" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="864.0" y="153.222462744727" width="9" height="136.777537255273" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="864.0" y="60" width="9" height="93.222462744727" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="878.3333333333333" y="158.09091436460315" width="9" height="131.90908563539685" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="878.3333333333333" y="60" width="9" height="98.09091436460315" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="892.6666666666667" y="162.25807174010293" width="9" height="127.74192825989707" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="892.6666666666667" y="60" width="9" height="102.25807174010293" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="907.0" y="165.55780345689067" width="9" height="124.44219654310935" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="907.0" y="60" width="9" height="105.55780345689065" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="921.3333333333333" y="167.85855962432356" width="9" height="122.14144037567644" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="921.3333333333333" y="60" width="9" height="107.85855962432356" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="935.6666666666667" y="169.0686163544621" width="9" height="120.9313836455379" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="935.6666666666667" y="60" width="9" height="109.0686163544621" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="950.0" y="169.1397325040304" width="9" height="120.86026749596958" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="950.0" y="60" width="9" height="109.13973250403042" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="964.3333333333333" y="168.06907289656525" width="9" height="121.93092710343475" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="964.3333333333333" y="60" width="9" height="108.06907289656525" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="978.6666666666667" y="165.8993213519544" width="9" height="124.1006786480456" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="978.6666666666667" y="60" width="9" height="105.8993213519544" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="993.0" y="162.71697901723462" width="9" height="127.28302098276538" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="993.0" y="60" width="9" height="102.71697901723462" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="1007.3333333333333" y="158.64891583882923" width="9" height="131.35108416117077" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="1007.3333333333333" y="60" width="9" height="98.64891583882923" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="1021.6666666666667" y="153.8573126581455" width="9" height="136.1426873418545" fill="#E74C3C" opacity="0.5" rx="1"/>
+<rect x="1021.6666666666667" y="60" width="9" height="93.8573126581455" fill="#16a085" opacity="0.5" rx="1"/>
+<rect x="620" y="65" width="10" height="10" fill="#E74C3C" opacity="0.6"/>
+<text x="635" y="74" fill="#444" font_size="9">Local Sensors</text>
+<rect x="720" y="65" width="10" height="10" fill="#16a085" opacity="0.6"/>
+<text x="735" y="74" fill="#444" font_size="9">Virtual Twin</text>
+<rect x="30" y="340" width="500" height="280" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="280.0" y="484.0" fill="#025e8d" font_size="8px" font_weight="bold" text_anchor="middle" dominant_baseline="middle"></text>
+<rect x="30" y="340" width="500" height="280" fill="#fff" stroke="#d5d5d5" stroke-width="1" rx="4"/>
+<text x="280.0" y="358" fill="#222" font_size="12" font_weight="bold" text_anchor="middle">Detection Accuracy vs Link Quality</text>
+<text x="42" y="480.0" fill="#6f6f6f" font_size="9" text_anchor="middle" transform="rotate(-90, 42, 480.0)">mAP@0.5 (%)</text>
+<path d="M 80,485.0 L 80.0,513.6157645642494 L 94.33333333333333,481.1463702211232 L 108.66666666666667,457.3930951228763 L 123.0,463.82943917371426 L 137.33333333333334,443.07370622499707 L 151.66666666666669,431.47638461431495 L 166.0,435.3470683667488 L 180.33333333333331,426.37630715920295 L 194.66666666666669,438.59594232588654 L 209.0,431.3797909410083 L 223.33333333333334,425.6979120072473 L 237.66666666666666,436.7062677292366 L 252.0,452.9059767182941 L 266.33333333333337,452.78018247092166 L 280.66666666666663,457.5201687737143 L 295.0,500.45992424019863 L 309.33333333333337,475.02716150009303 L 323.66666666666663,503.5605428613751 L 338.0,505.5517912571913 L 352.3333333333333,506.4134891072862 L 366.6666666666667,544.2903909983562 L 381.0,543.274178441698 L 395.3333333333333,543.0354292512178 L 409.6666666666667,551.1503982018552 L 424.0,522.3276943859375 L 438.3333333333333,549.9910248721386 L 452.6666666666667,542.1874306680078 L 467.0,527.083484171035 L 481.3333333333333,535.1225512275336 L 495.6666666666667,516.2649535014881" fill="none" stroke="#16a085" stroke-width="2"/>
+<line x1="80" y1="531.0" x2="510" y2="531.0" stroke="#c0392b" stroke_width="1" stroke_dasharray="4,4"/>
+<text x="490" y="543.0" fill="#c0392b" font_size="8" text_anchor="end">Degradation threshold</text>
+<rect x="560" y="340" width="500" height="280" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="810.0" y="484.0" fill="#025e8d" font_size="8px" font_weight="bold" text_anchor="middle" dominant_baseline="middle"></text>
+<rect x="560" y="340" width="500" height="280" fill="#fff" stroke="#d5d5d5" stroke-width="1" rx="4"/>
+<text x="810.0" y="358" fill="#222" font_size="12" font_weight="bold" text_anchor="middle">Occlusion Robustness</text>
+<text x="572" y="480.0" fill="#6f6f6f" font_size="9" text_anchor="middle" transform="rotate(-90, 572, 480.0)">Tracking Error (m)</text>
+<path d="M 610,595 L 610.0,593.1 L 627.2,591.9027749901566 L 644.4,590.497818426082 L 661.6,588.8490866248691 L 678.8,586.9142819327958 L 696.0,584.643767593402 L 713.2,581.9792943333805 L 730.4,578.8525059972783 L 747.6,575.1831858935719 L 764.8,570.8771988627238 L 782.0,565.8240762716737 L 799.2,559.8941819786221 L 816.4,552.9353865618938 L 833.6,544.7691644913551 L 850.8,535.1860141166447 L 868.0,523.940082973573 L 885.2,510.7428605227528 L 902.4,495.2557765098181 L 919.6,477.0815150606758 L 936.8,455.75382167785995 L 954.0,430.7255416399455 L 971.2,401.3545829332255 L 988.4,393.0 L 1005.6,393.0 L 1022.8,393.0" fill="none" stroke="#27ae60" stroke-width="2"/>
+<path d="M 610,595 L 610.0,586.2 L 627.2,582.4567617255647 L 644.4,577.698173249738 L 661.6,571.6488216931143 L 678.8,563.958588666761 L 696.0,554.1823864662356 L 713.2,541.7543977254476 L 730.4,525.9553275985168 L 747.6,505.87077312378767 L 764.8,480.3383003132043 L 782.0,447.8801659471459 L 799.2,406.61779021327607 L 816.4,381.5 L 833.6,381.5 L 850.8,381.5 L 868.0,381.5 L 885.2,381.5 L 902.4,381.5 L 919.6,381.5 L 936.8,381.5 L 954.0,381.5 L 971.2,381.5 L 988.4,381.5 L 1005.6,381.5 L 1022.8,381.5" fill="none" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,3"/>
+<rect x="674.5" y="370" width="301.0" height="230" fill="#c0392b" opacity="0.06"/>
+<text x="825.0" y="390" fill="#c0392b" font_size="9" text_anchor="middle">Occlusion Period</text>
+<text x="620" y="520" fill="#27ae60" font_size="8">With Digital Twin</text>
+<text x="620" y="535" fill="#c0392b" font_size="8">Without Digital Twin</text>
+</svg>
+</div>
+
+<!-- Caption -->
+<div class="figure-caption">
+    <span class="caption-label">Figure 7.</span>
+    Analysis of communication-constrained operation. Panel (a): Link quality time series with degradation threshold. Panel (b): Adaptive weighting between local sensors and virtual twin predictions. Panel (c): Detection accuracy (mAP) as a function of link quality. Panel (d): Occlusion robustness — tracking error with and without digital twin.
+</div>
+
+<!-- Bibliographic Data -->
+<div class="figure-cite">
+<strong>Related Work — Cite as:</strong><br>
+Yan, J., Zhang, T., Guan, X., Yang, X. & Chen, C. (2026).
+Digital twin-driven swarm of autonomous underwater vehicles for marine exploration.
+<em>Communications Engineering</em>, <strong>5</strong>, Article number from
+<a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
+<br><br>
+<strong>Eldarin Framework:</strong><br>
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
+FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
+arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
+</div>
+
+<!-- Navigation -->
+<div class="figure-nav">
+    <a class="nav-btn " href="fig_06.html">← Previous</a>
+    <span class="figure-index">Figure 7 of 10</span>
+    <a class="nav-btn " href="fig_08.html">Next →</a>
+</div>
+
+<!-- Tooltip script -->
+<script>
+(function() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.hoverable').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            tooltip.classList.add('visible');
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+            tooltip.innerHTML = '<div class="tooltip-title">' + (el.getAttribute('data-title') || '') + '</div>' +
+                               '<div>' + (el.getAttribute('data-desc') || '') + '</div>';
+        });
+        el.addEventListener('mousemove', e => {
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    });
+})();
+</script>
+
+</body>
+</html>

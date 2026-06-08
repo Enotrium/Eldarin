@@ -6,10 +6,9 @@ __pycache__/
 dist/
 build/
 
-# Generated images/figures (large binaries)
-images/*.png
-images/*.webp
-figures/*.html
+# Generated images/figures — committed for README display
+# images/*.png  (keep for README)
+# figures/*.html  (keep for README)
 
 # Checkpoints
 checkpoints/*.pth

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figure 2: Multi-Modal Encoder Architecture — Eldarin</title>
+<style>
+:root { --figure-width: 1100px; }
+
+:root {
+    --bg: #ffffff;
+    --text: #222222;
+    --text-secondary: #6f6f6f;
+    --border: #d5d5d5;
+    --accent: #025e8d;
+    --accent-hover: #069;
+    --code-bg: #f5f5f5;
+    --rgb: #E74C3C;
+    --event: #d2991d;
+    --audio: #3498DB;
+    --imu: #2ECC71;
+    --vsa: #8e44ad;
+    --twin: #16a085;
+    --swarm: #27ae60;
+    --fpga: #00aa41;
+    --detection: #e67e22;
+    --tracking: #c0392b;
+    --surface: #ecf0f1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: var(--figure-width);
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    font-size: 14px;
+}
+
+/* Figure header */
+.figure-header {
+    border-bottom: 3px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.figure-number {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.figure-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.figure-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* SVG container */
+.figure-canvas {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.figure-canvas svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Tooltip */
+.tooltip {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    max-width: 340px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip.visible { display: block; }
+
+.tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--accent);
+}
+
+/* Caption */
+.figure-caption {
+    margin-top: 16px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+
+.caption-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+/* Navigation */
+.figure-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.nav-btn:hover {
+    background: #f0f6fc;
+    border-color: var(--accent);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.figure-index {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Bibliography */
+.figure-cite {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* Grid background in SVG */
+.grid-bg { fill: #f8f9fa; }
+
+/* Hoverable groups */
+.hoverable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.hoverable:hover {
+    filter: brightness(0.95);
+}
+
+.hoverable:hover + .tooltip,
+.hoverable:focus + .tooltip {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body { padding: 12px 16px 24px; font-size: 13px; }
+    .figure-title { font-size: 18px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- Tooltip overlay -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Figure Header -->
+<div class="figure-header">
+    <div class="figure-number">Figure 2</div>
+    <h1 class="figure-title">Multi-Modal Encoder Architecture</h1>
+    <div class="figure-subtitle">Single-modality encoders with VSA/HDC projection</div>
+</div>
+
+<!-- SVG Canvas -->
+<div class="figure-canvas">
+<svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" style="max-width:1100px">
+<rect width="1100" height="650" fill="#f8f9fa"/>
+<rect x="40" y="30" width="260" height="280" rx="6" fill="#E74C3C" fill-opacity="0.08" stroke="#E74C3C" stroke-width="1.5" class="hoverable"/>
+<text x="170.0" y="174.0" fill="#E74C3C" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Visual Encoder (ResNet18 + FPN)</text>
+<text x="50" y="55" fill="#6f6f6f" font_size="11" font_family="monospace">Input: 3×640×640 RGB</text>
+<text x="50" y="81" fill="#6f6f6f" font_size="11" font_family="monospace">Conv1: 64×320×320</text>
+<text x="50" y="107" fill="#6f6f6f" font_size="11" font_family="monospace">ResBlock1: 64×160×160</text>
+<text x="50" y="133" fill="#6f6f6f" font_size="11" font_family="monospace">ResBlock2: 128×80×80</text>
+<text x="50" y="159" fill="#6f6f6f" font_size="11" font_family="monospace">ResBlock3: 256×40×40</text>
+<text x="50" y="185" fill="#6f6f6f" font_size="11" font_family="monospace">ResBlock4: 512×20×20</text>
+<text x="50" y="211" fill="#6f6f6f" font_size="11" font_family="monospace">FPN: 256×{20,40,80,160}</text>
+<text x="50" y="237" fill="#6f6f6f" font_size="11" font_family="monospace">Global Pool: 1024-dim</text>
+<rect x="340" y="30" width="260" height="280" rx="6" fill="#d2991d" fill-opacity="0.08" stroke="#d2991d" stroke-width="1.5" class="hoverable"/>
+<text x="470.0" y="174.0" fill="#d2991d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Event Encoder (FPGA-Compatible)</text>
+<text x="350" y="55" fill="#6f6f6f" font_size="11" font_family="monospace">Events (x,y,t,p)</text>
+<text x="350" y="81" fill="#6f6f6f" font_size="11" font_family="monospace">Voxel Grid: 10×480×640</text>
+<text x="350" y="107" fill="#6f6f6f" font_size="11" font_family="monospace">Conv1: 32×240×320</text>
+<text x="350" y="133" fill="#6f6f6f" font_size="11" font_family="monospace">Conv2: 64×120×160</text>
+<text x="350" y="159" fill="#6f6f6f" font_size="11" font_family="monospace">Conv3: 128×60×80</text>
+<text x="350" y="185" fill="#6f6f6f" font_size="11" font_family="monospace">Conv4: 256×30×40</text>
+<text x="350" y="211" fill="#6f6f6f" font_size="11" font_family="monospace">Pyramid: 128/128/128</text>
+<text x="350" y="237" fill="#6f6f6f" font_size="11" font_family="monospace">Global: 512-dim</text>
+<rect x="640" y="30" width="240" height="280" rx="6" fill="#3498DB" fill-opacity="0.08" stroke="#3498DB" stroke-width="1.5" class="hoverable"/>
+<text x="760.0" y="174.0" fill="#3498DB" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Audio Encoder (Mel-Spec + CNN)</text>
+<text x="650" y="55" fill="#6f6f6f" font_size="11" font_family="monospace">Waveform [B,T]</text>
+<text x="650" y="81" fill="#6f6f6f" font_size="11" font_family="monospace">Mel-Spec: 128×T</text>
+<text x="650" y="107" fill="#6f6f6f" font_size="11" font_family="monospace">Conv1: 32</text>
+<text x="650" y="133" fill="#6f6f6f" font_size="11" font_family="monospace">Conv2: 64</text>
+<text x="650" y="159" fill="#6f6f6f" font_size="11" font_family="monospace">Conv3: 128</text>
+<text x="650" y="185" fill="#6f6f6f" font_size="11" font_family="monospace">Conv4: 256</text>
+<text x="650" y="211" fill="#6f6f6f" font_size="11" font_family="monospace">Conv5: 512</text>
+<text x="650" y="237" fill="#6f6f6f" font_size="11" font_family="monospace">Attention Pool: 512-dim</text>
+<rect x="40" y="340" width="260" height="100" rx="6" fill="#2ECC71" fill-opacity="0.08" stroke="#2ECC71" stroke-width="1.5" class="hoverable"/>
+<text x="170.0" y="394.0" fill="#2ECC71" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">IMU Encoder (1D CNN + BiLSTM → 128-dim)</text>
+<text x="50" y="385" fill="#6f6f6f" font_size="10" font_family="monospace">ax, ay, az, gx, gy, gz, mx, my, mz</text>
+<text x="50" y="405" fill="#6f6f6f" font_size="10" font_family="monospace">Aux: GPS lat/lon/alt/heading</text>
+<text x="550" y="360" fill="#8e44ad" font_size="13" font_weight="bold" text_anchor="middle">→ Hierarchy Module (2048→1024→512→256)</text>
+<defs>
+        <marker id="arrow_6961742069639085274" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#8e44ad"/>
+        </marker>
+    </defs><line x1="300" y1="310" x2="450" y2="355" stroke="#8e44ad" stroke-width="2.0" marker-end="url(#arrow_6961742069639085274)" opacity="0.6"/>
+<defs>
+        <marker id="arrow_2145105971370403581" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#8e44ad"/>
+        </marker>
+    </defs><line x1="800" y1="310" x2="650" y2="355" stroke="#8e44ad" stroke-width="2.0" marker-end="url(#arrow_2145105971370403581)" opacity="0.6"/>
+<text x="450" y="400" fill="#8e44ad" font_size="11" text_anchor="middle" opacity="0.7">All features projected to HD space (8192-dim) via VSAHDC.encode()</text>
+<rect x="120" y="460" width="800" height="100" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="520.0" y="514.0" fill="#025e8d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Feature Dimensions Summary</text>
+<text x="140" y="495" fill="#222" font_size="11" font_family="monospace" font_weight="bold">Visual: 1024-dim</text>
+<text x="140" y="515" fill="#222" font_size="11" font_family="monospace" font_weight="bold">Event: 512-dim</text>
+<text x="140" y="535" fill="#222" font_size="11" font_family="monospace" font_weight="bold">Audio: 512-dim</text>
+<text x="140" y="555" fill="#222" font_size="11" font_family="monospace" font_weight="bold">IMU: 128-dim</text>
+<text x="520" y="495" fill="#222" font_size="11" font_family="monospace" font_weight="bold">HD Space: 8192-dim</text>
+<text x="520" y="515" fill="#222" font_size="11" font_family="monospace" font_weight="bold">Hierarchy: [2048, 1024, 512, 256]</text>
+<text x="520" y="535" fill="#222" font_size="11" font_family="monospace" font_weight="bold">FPN out: 256 per scale</text>
+<text x="520" y="555" fill="#222" font_size="11" font_family="monospace" font_weight="bold">Detection head: 256 → (4+1+10+3+3)×3 anchors</text>
+</svg>
+</div>
+
+<!-- Caption -->
+<div class="figure-caption">
+    <span class="caption-label">Figure 2.</span>
+    Detailed encoder architectures for each modality. Visual encoder uses ResNet-18 backbone with Feature Pyramid Network (FPN) outputting multi-scale features (2048, 1024, 512, 256 channels). Event encoder processes stream data through voxel grid representation with FPGA-compatible lightweight CNN. Audio encoder converts waveforms to mel-spectrograms via STFT. IMU encoder uses 1D CNN + bidirectional LSTM.
+</div>
+
+<!-- Bibliographic Data -->
+<div class="figure-cite">
+<strong>Related Work — Cite as:</strong><br>
+Yan, J., Zhang, T., Guan, X., Yang, X. & Chen, C. (2026).
+Digital twin-driven swarm of autonomous underwater vehicles for marine exploration.
+<em>Communications Engineering</em>, <strong>5</strong>, Article number from
+<a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
+<br><br>
+<strong>Eldarin Framework:</strong><br>
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
+FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
+arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
+</div>
+
+<!-- Navigation -->
+<div class="figure-nav">
+    <a class="nav-btn " href="fig_01.html">← Previous</a>
+    <span class="figure-index">Figure 2 of 10</span>
+    <a class="nav-btn " href="fig_03.html">Next →</a>
+</div>
+
+<!-- Tooltip script -->
+<script>
+(function() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.hoverable').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            tooltip.classList.add('visible');
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+            tooltip.innerHTML = '<div class="tooltip-title">' + (el.getAttribute('data-title') || '') + '</div>' +
+                               '<div>' + (el.getAttribute('data-desc') || '') + '</div>';
+        });
+        el.addEventListener('mousemove', e => {
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    });
+})();
+</script>
+
+</body>
+</html>

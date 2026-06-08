@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figure 10: UAV Hardware Deployment Architecture — Eldarin</title>
+<style>
+:root { --figure-width: 1100px; }
+
+:root {
+    --bg: #ffffff;
+    --text: #222222;
+    --text-secondary: #6f6f6f;
+    --border: #d5d5d5;
+    --accent: #025e8d;
+    --accent-hover: #069;
+    --code-bg: #f5f5f5;
+    --rgb: #E74C3C;
+    --event: #d2991d;
+    --audio: #3498DB;
+    --imu: #2ECC71;
+    --vsa: #8e44ad;
+    --twin: #16a085;
+    --swarm: #27ae60;
+    --fpga: #00aa41;
+    --detection: #e67e22;
+    --tracking: #c0392b;
+    --surface: #ecf0f1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: var(--figure-width);
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    font-size: 14px;
+}
+
+/* Figure header */
+.figure-header {
+    border-bottom: 3px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.figure-number {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.figure-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.figure-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* SVG container */
+.figure-canvas {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.figure-canvas svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Tooltip */
+.tooltip {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    max-width: 340px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip.visible { display: block; }
+
+.tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--accent);
+}
+
+/* Caption */
+.figure-caption {
+    margin-top: 16px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+
+.caption-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+/* Navigation */
+.figure-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.nav-btn:hover {
+    background: #f0f6fc;
+    border-color: var(--accent);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.figure-index {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Bibliography */
+.figure-cite {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* Grid background in SVG */
+.grid-bg { fill: #f8f9fa; }
+
+/* Hoverable groups */
+.hoverable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.hoverable:hover {
+    filter: brightness(0.95);
+}
+
+.hoverable:hover + .tooltip,
+.hoverable:focus + .tooltip {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body { padding: 12px 16px 24px; font-size: 13px; }
+    .figure-title { font-size: 18px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- Tooltip overlay -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Figure Header -->
+<div class="figure-header">
+    <div class="figure-number">Figure 10</div>
+    <h1 class="figure-title">UAV Hardware Deployment Architecture</h1>
+    <div class="figure-subtitle">Onboard FPGA + Embedded GPU + Multi-Sensor Integration</div>
+</div>
+
+<!-- SVG Canvas -->
+<div class="figure-canvas">
+<svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" style="max-width:1100px">
+<rect width="1100" height="650" fill="#f8f9fa"/>
+<rect x="160" y="270" width="80" height="60" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="2" rx="8"/>
+<text x="200" y="298" fill="#16a085" font_size="11" font_weight="bold" text_anchor="middle">UAV
+Onboard</text>
+<text x="200" y="320" fill="#16a085" font_size="11" font_weight="bold" text_anchor="middle">Computer</text>
+<rect x="75" y="248" width="90" height="24" rx="6" fill="#E74C3C" fill-opacity="0.08" stroke="#E74C3C" stroke-width="1.5" class="hoverable"/>
+<text x="120.0" y="264.0" fill="#E74C3C" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">RGB Camera</text>
+<line x1="120" y1="260" x2="175" y2="285" stroke="#999" stroke_width="1" opacity="0.4"/>
+<rect x="235" y="248" width="90" height="24" rx="6" fill="#d2991d" fill-opacity="0.08" stroke="#d2991d" stroke-width="1.5" class="hoverable"/>
+<text x="280.0" y="264.0" fill="#d2991d" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Event Cam</text>
+<line x1="280" y1="260" x2="225" y2="285" stroke="#999" stroke_width="1" opacity="0.4"/>
+<rect x="75" y="348" width="90" height="24" rx="6" fill="#3498DB" fill-opacity="0.08" stroke="#3498DB" stroke-width="1.5" class="hoverable"/>
+<text x="120.0" y="364.0" fill="#3498DB" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Microphone</text>
+<line x1="120" y1="360" x2="175" y2="315" stroke="#999" stroke_width="1" opacity="0.4"/>
+<rect x="235" y="348" width="90" height="24" rx="6" fill="#2ECC71" fill-opacity="0.08" stroke="#2ECC71" stroke-width="1.5" class="hoverable"/>
+<text x="280.0" y="364.0" fill="#2ECC71" font_size="9px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">IMU/GPS</text>
+<line x1="280" y1="360" x2="225" y2="315" stroke="#999" stroke_width="1" opacity="0.4"/>
+<rect x="420" y="180" width="220" height="60" rx="6" fill="#00aa41" fill-opacity="0.08" stroke="#00aa41" stroke-width="1.5" class="hoverable"/>
+<text x="530.0" y="207.0" fill="#00aa41" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">FPGA Accelerator</text>
+<text x="530.0" y="223.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">Xilinx Zynq · SNN Inference
+Engine · VSA/HDC Kernel</text>
+<rect x="420" y="270" width="220" height="60" rx="6" fill="#3498DB" fill-opacity="0.08" stroke="#3498DB" stroke-width="1.5" class="hoverable"/>
+<text x="530.0" y="297.0" fill="#3498DB" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Embedded GPU</text>
+<text x="530.0" y="313.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">Jetson Orin / Xavier
+ANN Forward Pass</text>
+<rect x="420" y="360" width="220" height="60" rx="6" fill="#27ae60" fill-opacity="0.08" stroke="#27ae60" stroke-width="1.5" class="hoverable"/>
+<text x="530.0" y="387.0" fill="#27ae60" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Communication</text>
+<text x="530.0" y="403.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">5G / LoRa Mesh
+Swarm Data Exchange</text>
+<defs>
+        <marker id="arrow_2010684068975288826" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#999"/>
+        </marker>
+    </defs><line x1="280" y1="280" x2="310" y2="210" stroke="#999" stroke-width="1.5" marker-end="url(#arrow_2010684068975288826)" opacity="0.6"/>
+<rect x="730" y="180" width="280" height="50" rx="6" fill="#e67e22" fill-opacity="0.08" stroke="#e67e22" stroke-width="1.5" class="hoverable"/>
+<text x="870.0" y="202.0" fill="#e67e22" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Detection Output</text>
+<text x="870.0" y="218.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">BBoxes + Class + 3D Position</text>
+<rect x="730" y="270" width="280" height="50" rx="6" fill="#c0392b" fill-opacity="0.08" stroke="#c0392b" stroke-width="1.5" class="hoverable"/>
+<text x="870.0" y="292.0" fill="#c0392b" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Tracking Output</text>
+<text x="870.0" y="308.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">Track IDs + Velocity + Trajectories</text>
+<rect x="730" y="360" width="280" height="50" rx="6" fill="#16a085" fill-opacity="0.08" stroke="#16a085" stroke-width="1.5" class="hoverable"/>
+<text x="870.0" y="382.0" fill="#16a085" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Swarm Output</text>
+<text x="870.0" y="398.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">Consensus Twin → Neighbor UAVs</text>
+<defs>
+        <marker id="arrow_5359689024897362157" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#999"/>
+        </marker>
+    </defs><line x1="640" y1="205" x2="730" y2="205" stroke="#999" stroke-width="1.5" marker-end="url(#arrow_5359689024897362157)" opacity="0.6"/>
+<defs>
+        <marker id="arrow_3549725211303142501" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#999"/>
+        </marker>
+    </defs><line x1="640" y1="295" x2="730" y2="295" stroke="#999" stroke-width="1.5" marker-end="url(#arrow_3549725211303142501)" opacity="0.6"/>
+<defs>
+        <marker id="arrow_9067273518944690060" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#999"/>
+        </marker>
+    </defs><line x1="640" y1="385" x2="730" y2="385" stroke="#999" stroke-width="1.5" marker-end="url(#arrow_9067273518944690060)" opacity="0.6"/>
+<rect x="30" y="490" width="380" height="40" rx="6" fill="#e67e22" fill-opacity="0.08" stroke="#e67e22" stroke-width="1.5" class="hoverable"/>
+<text x="220.0" y="507.0" fill="#e67e22" font_size="11px" font_weight="bold" text_anchor="middle" dominant_baseline="auto">Ground Control Station</text>
+<text x="220.0" y="523.0" fill="#6f6f6f" font_size="8px" text_anchor="middle">Swarm Monitor · Re-Tasking · Data Collection</text>
+<rect x="30" y="558" width="1020" height="70" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="540.0" y="597.0" fill="#025e8d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Deployment Specifications</text>
+<text x="45" y="585" fill="#444" font_size="12" font_family="monospace" font_weight="bold">Weight: &lt;500g payload   |   Power: 5-15W total   |   Latency: &lt;33ms (30 FPS)   |   Range: 1-5km</text>
+<text x="45" y="607" fill="#444" font_size="12" font_family="monospace" font_weight="bold">Communication: 5G / LoRa mesh   |   Operating Altitude: 50-200m   |   FPGA Clock: 200 MHz   |   SNN Timesteps: 100</text>
+</svg>
+</div>
+
+<!-- Caption -->
+<div class="figure-caption">
+    <span class="caption-label">Figure 10.</span>
+    Physical UAV deployment configuration. RGB camera, event camera, microphone array, and IMU/GPS feed into onboard processing: FPGA accelerator (SNN inference engine), embedded GPU (ANN forward pass), and communication module (5G/LoRa mesh). Outputs: detection results, tracking with IDs and trajectories, and swarm consensus data exchanged with neighboring UAVs.
+</div>
+
+<!-- Bibliographic Data -->
+<div class="figure-cite">
+<strong>Related Work — Cite as:</strong><br>
+Yan, J., Zhang, T., Guan, X., Yang, X. & Chen, C. (2026).
+Digital twin-driven swarm of autonomous underwater vehicles for marine exploration.
+<em>Communications Engineering</em>, <strong>5</strong>, Article number from
+<a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
+<br><br>
+<strong>Eldarin Framework:</strong><br>
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
+FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
+arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
+</div>
+
+<!-- Navigation -->
+<div class="figure-nav">
+    <a class="nav-btn " href="fig_09.html">← Previous</a>
+    <span class="figure-index">Figure 10 of 10</span>
+    <a class="nav-btn disabled" href="#">Next →</a>
+</div>
+
+<!-- Tooltip script -->
+<script>
+(function() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.hoverable').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            tooltip.classList.add('visible');
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+            tooltip.innerHTML = '<div class="tooltip-title">' + (el.getAttribute('data-title') || '') + '</div>' +
+                               '<div>' + (el.getAttribute('data-desc') || '') + '</div>';
+        });
+        el.addEventListener('mousemove', e => {
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    });
+})();
+</script>
+
+</body>
+</html>

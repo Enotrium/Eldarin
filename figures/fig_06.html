@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figure 6: 4D Object Detection & Tracking — Eldarin</title>
+<style>
+:root { --figure-width: 1100px; }
+
+:root {
+    --bg: #ffffff;
+    --text: #222222;
+    --text-secondary: #6f6f6f;
+    --border: #d5d5d5;
+    --accent: #025e8d;
+    --accent-hover: #069;
+    --code-bg: #f5f5f5;
+    --rgb: #E74C3C;
+    --event: #d2991d;
+    --audio: #3498DB;
+    --imu: #2ECC71;
+    --vsa: #8e44ad;
+    --twin: #16a085;
+    --swarm: #27ae60;
+    --fpga: #00aa41;
+    --detection: #e67e22;
+    --tracking: #c0392b;
+    --surface: #ecf0f1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: var(--figure-width);
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    font-size: 14px;
+}
+
+/* Figure header */
+.figure-header {
+    border-bottom: 3px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.figure-number {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.figure-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 4px 0;
+}
+
+.figure-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* SVG container */
+.figure-canvas {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.figure-canvas svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Tooltip */
+.tooltip {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    max-width: 340px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.tooltip.visible { display: block; }
+
+.tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--accent);
+}
+
+/* Caption */
+.figure-caption {
+    margin-top: 16px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+
+.caption-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+/* Navigation */
+.figure-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+}
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.nav-btn:hover {
+    background: #f0f6fc;
+    border-color: var(--accent);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.figure-index {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Bibliography */
+.figure-cite {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* Grid background in SVG */
+.grid-bg { fill: #f8f9fa; }
+
+/* Hoverable groups */
+.hoverable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.hoverable:hover {
+    filter: brightness(0.95);
+}
+
+.hoverable:hover + .tooltip,
+.hoverable:focus + .tooltip {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body { padding: 12px 16px 24px; font-size: 13px; }
+    .figure-title { font-size: 18px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- Tooltip overlay -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Figure Header -->
+<div class="figure-header">
+    <div class="figure-number">Figure 6</div>
+    <h1 class="figure-title">4D Object Detection & Tracking</h1>
+    <div class="figure-subtitle">Bounding Boxes, 3D Position, Velocity, and Trajectories</div>
+</div>
+
+<!-- SVG Canvas -->
+<div class="figure-canvas">
+<svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" style="max-width:1100px">
+<rect width="1100" height="650" fill="#f8f9fa"/>
+<rect x="30" y="30" width="600" height="400" fill="#dfe6e9" rx="4"/>
+<rect x="30" y="250" width="600" height="80" fill="#b2bec3" opacity="0.5"/>
+<rect x="30" y="280" width="300" height="4" fill="#ffd700" opacity="0.6(255,215,0,255)"/>
+<polyline points="100,350 130,310 160,270 200,225 250,175" fill="none" stroke="#E74C3C" stroke-width="2" opacity="0.5"/>
+<circle cx="100" cy="350" r="3" fill="#E74C3C" opacity="0.20"/>
+<circle cx="130" cy="310" r="3" fill="#E74C3C" opacity="0.36"/>
+<circle cx="160" cy="270" r="3" fill="#E74C3C" opacity="0.52"/>
+<circle cx="200" cy="225" r="3" fill="#E74C3C" opacity="0.68"/>
+<circle cx="250" cy="175" r="3" fill="#E74C3C" opacity="0.84"/>
+<rect x="240" y="165" width="28" height="16" fill="#E74C3C" fill-opacity="0.15" stroke="#E74C3C" stroke-width="2" rx="2"/>
+<text x="254.0" y="159" fill="#E74C3C" font_size="9" font_weight="bold" text_anchor="middle">Car ID:1</text>
+<line x1="254.0" y1="173.0" x2="354.0" y2="73.0" stroke="#E74C3C" stroke-width="2"/>
+<polyline points="350,330 345,290 340,250 330,205 315,165" fill="none" stroke="#3498DB" stroke-width="2" opacity="0.5"/>
+<circle cx="350" cy="330" r="3" fill="#3498DB" opacity="0.20"/>
+<circle cx="345" cy="290" r="3" fill="#3498DB" opacity="0.36"/>
+<circle cx="340" cy="250" r="3" fill="#3498DB" opacity="0.52"/>
+<circle cx="330" cy="205" r="3" fill="#3498DB" opacity="0.68"/>
+<circle cx="315" cy="165" r="3" fill="#3498DB" opacity="0.84"/>
+<rect x="305" y="155" width="30" height="18" fill="#3498DB" fill-opacity="0.15" stroke="#3498DB" stroke-width="2" rx="2"/>
+<text x="320.0" y="149" fill="#3498DB" font_size="9" font_weight="bold" text_anchor="middle">SUV ID:2</text>
+<line x1="320.0" y1="164.0" x2="290.0" y2="84.0" stroke="#3498DB" stroke-width="2"/>
+<polyline points="520,320 510,285 495,245 480,205 460,170" fill="none" stroke="#d2991d" stroke-width="2" opacity="0.5"/>
+<circle cx="520" cy="320" r="3" fill="#d2991d" opacity="0.20"/>
+<circle cx="510" cy="285" r="3" fill="#d2991d" opacity="0.36"/>
+<circle cx="495" cy="245" r="3" fill="#d2991d" opacity="0.52"/>
+<circle cx="480" cy="205" r="3" fill="#d2991d" opacity="0.68"/>
+<circle cx="460" cy="170" r="3" fill="#d2991d" opacity="0.84"/>
+<rect x="450" y="158" width="36" height="22" fill="#d2991d" fill-opacity="0.15" stroke="#d2991d" stroke-width="2" rx="2"/>
+<text x="468.0" y="152" fill="#d2991d" font_size="9" font_weight="bold" text_anchor="middle">Truck ID:3</text>
+<line x1="468.0" y1="169.0" x2="428.0" y2="99.0" stroke="#d2991d" stroke-width="2"/>
+<polyline points="580,360 575,335 570,310 565,280 558,255" fill="none" stroke="#2ECC71" stroke-width="2" opacity="0.5"/>
+<circle cx="580" cy="360" r="3" fill="#2ECC71" opacity="0.20"/>
+<circle cx="575" cy="335" r="3" fill="#2ECC71" opacity="0.36"/>
+<circle cx="570" cy="310" r="3" fill="#2ECC71" opacity="0.52"/>
+<circle cx="565" cy="280" r="3" fill="#2ECC71" opacity="0.68"/>
+<circle cx="558" cy="255" r="3" fill="#2ECC71" opacity="0.84"/>
+<rect x="548" y="245" width="38" height="24" fill="#2ECC71" fill-opacity="0.15" stroke="#2ECC71" stroke-width="2" rx="2"/>
+<text x="567.0" y="239" fill="#2ECC71" font_size="9" font_weight="bold" text_anchor="middle">Bus ID:4</text>
+<line x1="567.0" y1="257.0" x2="553.0" y2="207.0" stroke="#2ECC71" stroke-width="2"/>
+<polyline points="200,370 210,355 220,340 230,325 240,310" fill="none" stroke="#8e44ad" stroke-width="2" opacity="0.5"/>
+<circle cx="200" cy="370" r="3" fill="#8e44ad" opacity="0.20"/>
+<circle cx="210" cy="355" r="3" fill="#8e44ad" opacity="0.36"/>
+<circle cx="220" cy="340" r="3" fill="#8e44ad" opacity="0.52"/>
+<circle cx="230" cy="325" r="3" fill="#8e44ad" opacity="0.68"/>
+<circle cx="240" cy="310" r="3" fill="#8e44ad" opacity="0.84"/>
+<rect x="235" y="305" width="14" height="18" fill="#8e44ad" fill-opacity="0.15" stroke="#8e44ad" stroke-width="2" rx="2"/>
+<text x="242.0" y="299" fill="#8e44ad" font_size="9" font_weight="bold" text_anchor="middle">Person ID:5</text>
+<line x1="242.0" y1="314.0" x2="262.0" y2="284.0" stroke="#8e44ad" stroke-width="2"/>
+<rect x="680" y="30" width="380" height="180" rx="6" fill="#025e8d" fill-opacity="0.08" stroke="#025e8d" stroke-width="1.5" class="hoverable"/>
+<text x="870.0" y="124.0" fill="#025e8d" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">4D Tracking Data</text>
+<text x="695" y="60" fill="#6f6f6f" font_size="11" font_family="monospace">Car  ID:1  3D:(12.3, 8.7, 0.5)m  v=4.2 m/s</text>
+<text x="695" y="82" fill="#6f6f6f" font_size="11" font_family="monospace">SUV  ID:2  3D:(15.8, 5.2, 0.4)m  v=6.1 m/s</text>
+<text x="695" y="104" fill="#6f6f6f" font_size="11" font_family="monospace">Truck ID:3  3D:(20.1,-3.4, 0.8)m  v=5.8 m/s</text>
+<text x="695" y="126" fill="#6f6f6f" font_size="11" font_family="monospace">Bus  ID:4  3D:(-5.6,10.3, 0.6)m  v=7.2 m/s</text>
+<text x="695" y="148" fill="#6f6f6f" font_size="11" font_family="monospace">Person ID:5 3D:( 2.1,12.5, 1.7)m  v=1.1 m/s</text>
+<rect x="680" y="240" width="380" height="180" rx="6" fill="#27ae60" fill-opacity="0.08" stroke="#27ae60" stroke-width="1.5" class="hoverable"/>
+<text x="870.0" y="334.0" fill="#27ae60" font_size="12px" font_weight="bold" text_anchor="middle" dominant_baseline="middle">Evaluation Metrics</text>
+<text x="695" y="270" fill="#444" font_size="11" font_family="monospace">Detection:  mAP@0.5: 47.2%  |  mAP@0.5:0.95: 28.9%</text>
+<text x="695" y="292" fill="#444" font_size="11" font_family="monospace">Tracking:  MOTA: 38.5%  |  MOTP: 82.1%</text>
+<text x="695" y="314" fill="#444" font_size="11" font_family="monospace">ID Consistency:  IDF1: 45.3%  |  HOTA: 32.7%</text>
+<text x="695" y="336" fill="#444" font_size="11" font_family="monospace">3D / Spatial:  3D IoU: 0.62  |  ATE: 0.85m</text>
+<text x="695" y="358" fill="#444" font_size="11" font_family="monospace">Temporal:  Velocity RMSE: 0.42 m/s  |  RPE: 0.12m</text>
+</svg>
+</div>
+
+<!-- Caption -->
+<div class="figure-caption">
+    <span class="caption-label">Figure 6.</span>
+    UAV aerial view with five tracked objects (car, SUV, truck, bus, pedestrian) showing detection bounding boxes, trajectory trails, velocity arrows, and a 4D data panel with 3D world coordinates and velocities. Evaluation metrics shown: mAP@0.5, MOTA, MOTP, IDF1, 3D IoU, ATE, RPE.
+</div>
+
+<!-- Bibliographic Data -->
+<div class="figure-cite">
+<strong>Related Work — Cite as:</strong><br>
+Yan, J., Zhang, T., Guan, X., Yang, X. & Chen, C. (2026).
+Digital twin-driven swarm of autonomous underwater vehicles for marine exploration.
+<em>Communications Engineering</em>, <strong>5</strong>, Article number from
+<a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
+<br><br>
+<strong>Eldarin Framework:</strong><br>
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
+FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
+arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
+</div>
+
+<!-- Navigation -->
+<div class="figure-nav">
+    <a class="nav-btn " href="fig_05.html">← Previous</a>
+    <span class="figure-index">Figure 6 of 10</span>
+    <a class="nav-btn " href="fig_07.html">Next →</a>
+</div>
+
+<!-- Tooltip script -->
+<script>
+(function() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.hoverable').forEach(el => {
+        el.addEventListener('mouseenter', e => {
+            tooltip.classList.add('visible');
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+            tooltip.innerHTML = '<div class="tooltip-title">' + (el.getAttribute('data-title') || '') + '</div>' +
+                               '<div>' + (el.getAttribute('data-desc') || '') + '</div>';
+        });
+        el.addEventListener('mousemove', e => {
+            tooltip.style.left = (e.pageX + 12) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    });
+})();
+</script>
+
+</body>
+</html>
