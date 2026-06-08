@@ -5,7 +5,7 @@ Eldarin Inference Script
 Real-time UAV inference for detection, 4D tracking, and visualization.
 Supports RGB video, event streams, and multi-modal input.
 
-Adapted from VioPose (https://github.com/SeongJong-Yoo/VioPose, https://arxiv.org/pdf/2411.13607)
+
 Integrations:
   - FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
   - arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1

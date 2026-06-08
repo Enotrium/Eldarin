@@ -3,7 +3,7 @@ Visualization utilities for Eldarin
 =====================================
 Detection bounding boxes, tracking trajectories, and debug visualizations.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import torch

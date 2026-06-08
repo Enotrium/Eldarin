@@ -22,7 +22,7 @@ Usage:
     python scripts/generate_figures_html.py --output_dir figures/ --figures 1,2,3
 
 References:
-  VioPose: https://github.com/SeongJong-Yoo/VioPose
+  
   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
   arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1
   Yan et al. (2026): https://www.nature.com/articles/s44172-025-00571-7
@@ -491,7 +491,7 @@ def figure_01():
 
     # ── Legend ──
     legend_items = [
-        (60, 600, "VioPose Core", "#025e8d"),
+        (60, 600, "Eldarin Core", "#025e8d"),
         (260, 600, "VSA/HDC", "#8e44ad"),
         (440, 600, "Digital Twin", "#16a085"),
         (620, 600, "Swarm", "#27ae60"),
@@ -1170,7 +1170,7 @@ Digital twin-driven swarm of autonomous underwater vehicles for marine explorati
 <a href="https://www.nature.com/articles/s44172-025-00571-7" target="_blank" rel="noopener">10.1038/s44172-025-00571-7</a>
 <br><br>
 <strong>Eldarin Framework:</strong><br>
-VioPose (<a href="https://github.com/SeongJong-Yoo/VioPose">github.com/SeongJong-Yoo/VioPose</a>) ·
+Eldarin (<a href="https://github.com/Enotrium/Eldarin">github.com/Enotrium/Eldarin</a>) ·
 FPGA-Event-Based-encode (<a href="https://github.com/Enotrium/FPGA-Event-Based-encode">github.com/Enotrium</a>) ·
 arthedain-1 VSA/HDC (<a href="https://github.com/Enotrium/arthedain-1">github.com/Enotrium</a>)
 </div>
@@ -1322,7 +1322,7 @@ body {{
     <p>All figures &copy; 2026 Eldarin / Enotrium. Generated <strong>{datetime.date.today()}</strong>.
     Built with inline SVG, no external dependencies.</p>
     <p>
-        <a href="https://github.com/SeongJong-Yoo/VioPose">VioPose</a> ·
+        <a href="https://github.com/Enotrium/Eldarin">Eldarin</a> ·
         <a href="https://github.com/Enotrium/FPGA-Event-Based-encode">FPGA Event Encode</a> ·
         <a href="https://github.com/Enotrium/arthedain-1">arthedain-1 VSA/HDC</a> ·
         <a href="https://www.nature.com/articles/s44172-025-00571-7">Yan et al. (2026)</a>

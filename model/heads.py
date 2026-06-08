@@ -1,8 +1,8 @@
 """
 Detection + 4D Tracking Heads
 ===============================
-Adapted from VioPose's pose regression head → object detection + tracking.
-The original VioPose regresses 3D joint positions over time; Eldarin outputs:
+'s pose regression head → object detection + tracking.
+The original Eldarin regresses 3D joint positions over time; Eldarin outputs:
   - Bounding boxes (xyxy format)
   - Class probabilities
   - 3D positions (x, y, z in camera/world frame)
@@ -12,7 +12,7 @@ The original VioPose regresses 3D joint positions over time; Eldarin outputs:
 Uses a YOLO-style detection head with hyperdimensional Kalman filter
 for tracking, integrated with VSA/HDC representations.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 HD Kalman: from arthedain-1 VSA/HDC repo (https://github.com/Enotrium/arthedain-1)
 """
@@ -42,7 +42,7 @@ class DetectionHead(nn.Module):
     YOLO-style detection head adapted for UAV multi-object detection.
     Outputs bounding boxes and class probabilities at multiple scales.
 
-    Modified from VioPose: Instead of 3D joint positions, predicts:
+    Modified : Instead of 3D joint positions, predicts:
       - xyxy bounding boxes
       - Objectness score
       - Class probabilities
@@ -169,7 +169,7 @@ class TrackingHead(nn.Module):
     Maintains tracklets over time using VSA/HDC representations
     for robust association and state estimation.
 
-    Adapted from VioPose: The temporal pose estimation becomes
+    : The temporal pose estimation becomes
     multi-object trajectory tracking in HD space.
 
     The HD Kalman filter replaces standard matrix-inversion Kalman

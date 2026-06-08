@@ -8,7 +8,7 @@ vehicles for marine exploration" — Nature CommsEng.
 https://www.nature.com/articles/s44172-025-00571-7
 
 Each figure is adapted for Eldarin's UAV 4D detection & tracking with:
-  - VioPose hierarchical multimodal architecture
+  - Eldarin hierarchical multimodal architecture
   - FPGA event-based encoding
   - VSA/HDC hyperdimensional computing
   - Digital twin + swarm consensus
@@ -217,7 +217,7 @@ def figure_01_system_architecture():
 
     # Legend boxes at bottom
     legends = [
-        ('VioPose Core', 20, 10, COLORS['accent_blue']),
+        ('Eldarin Core', 20, 10, COLORS['accent_blue']),
         ('VSA/HDC', 48, 10, COLORS['accent_purple']),
         ('Digital Twin', 76, 10, COLORS['accent_cyan']),
         ('Swarm', 106, 10, COLORS['accent_green']),

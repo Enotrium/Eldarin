@@ -7,7 +7,7 @@ Supports RGB frames, event streams, audio, IMU, and pose data from:
   - UAVDT, UAV3D, FRED datasets
   - Custom event-based streams
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import torch

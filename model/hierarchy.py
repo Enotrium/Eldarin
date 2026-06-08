@@ -1,7 +1,7 @@
 """
 Hierarchy Module — Cascading High-to-Low Feature Fusion with VSA/HDC
 ======================================================================
-Adapted from VioPose's hierarchy module that cascades high-level semantics
+'s hierarchy module that cascades high-level semantics
 down to low-level features, preserving both global context and fine detail.
 
 Enhanced with VSA/HDC binding (from arthedain-1) for role-filler representations:
@@ -9,10 +9,10 @@ Enhanced with VSA/HDC binding (from arthedain-1) for role-filler representations
   - Low-level features (edges, motion, texture) act as "fillers"
   - Binding creates robust hyperdimensional representations
 
-This preserves VioPose's strength in handling subtle/fast motions and
+This preserves Eldarin's strength in handling subtle/fast motions and
 occlusions by maintaining multi-scale feature alignment.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 VSA/HDC: https://github.com/Enotrium/arthedain-1
 """
@@ -132,7 +132,7 @@ class HierarchyModule(nn.Module):
     """
     Hierarchical feature fusion module.
     Cascades features from high-level (semantic) to low-level (detailed),
-    preserving VioPose's architecture of progressive refinement.
+    preserving Eldarin's architecture of progressive refinement.
 
     The hierarchy flows: Level 0 (coarsest) → Level 1 → ... → Level N (finest).
     Each level fuses the previous (higher/coarser) level with the current

@@ -1,13 +1,13 @@
 """
 Visual Encoder for RGB frames
 ===============================
-Adapted from VioPose visual modality encoder (originally for 2D keypoints).
+ visual modality encoder (originally for 2D keypoints).
 Now processes full RGB frames via ResNet/CNN backbone → feature pyramid.
 
 Supports multiple backbones: ResNet-18/34/50, EfficientNet-B0, or custom MobileNet for UAV.
 Outputs multi-scale feature maps for the hierarchy module.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 """
 

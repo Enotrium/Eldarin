@@ -17,10 +17,10 @@ The digital twin maintains a hyperdimensional representation of:
   - Environmental context (scene semantics, weather, lighting)
 
 Virtual ↔ Physical synchronization uses Bayesian-style updates in HD space,
-consistent with the existing MixingModule architecture from VioPose.
+consistent with the existing MixingModule architecture .
 
 Original references:
-  VioPose: https://github.com/SeongJong-Yoo/VioPose, https://arxiv.org/pdf/2411.13607
+  
   VSA/HDC: https://github.com/Enotrium/arthedain-1
   FPGA Event Encode: https://github.com/Enotrium/FPGA-Event-Based-encode
 """

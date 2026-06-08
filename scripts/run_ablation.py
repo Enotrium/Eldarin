@@ -3,7 +3,7 @@
 Eldarin Ablation Study Runner
 ===============================
 Systematically evaluates the contribution of each architectural component:
-  1. Hierarchy Module (VioPose cascading fusion)
+  1. Hierarchy Module (Eldarin cascading fusion)
   2. VSA/HDC Binding (arthedain-1)
   3. Bayesian Mixing Module
   4. Event Encoder (FPGA-Event-Based-encode)
@@ -13,7 +13,7 @@ Systematically evaluates the contribution of each architectural component:
 Generates ablation results table for paper/analysis.
 
 References:
-  VioPose: https://github.com/SeongJong-Yoo/VioPose
+  
   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
   arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1
 """

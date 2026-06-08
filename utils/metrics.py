@@ -7,7 +7,7 @@ Computes standard UAV detection and tracking metrics:
   - 4D-specific: 3D IoU, velocity RMSE, trajectory error (ATE, RPE)
 
 Based on COCO eval and MOTChallenge metrics.
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import torch

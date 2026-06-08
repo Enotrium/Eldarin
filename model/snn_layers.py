@@ -12,7 +12,7 @@ Compatible with:
 The VSA/HDC operations (binding, bundling) are naturally SNN-friendly
 since they use bitwise/bipolar operations that map directly to spikes.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 FPGA Event Encode: https://github.com/Enotrium/FPGA-Event-Based-encode
 """
 

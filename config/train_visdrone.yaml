@@ -2,7 +2,7 @@
 # Based on config/base.yaml with VisDrone-specific settings
 #
 # VisDrone: https://github.com/VisDrone/VisDrone-Dataset
-# VioPose: https://github.com/SeongJong-Yoo/VioPose
+# 
 
 model:
   name: "Eldarin-VisDrone"

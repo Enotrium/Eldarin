@@ -1,6 +1,6 @@
 # Eldarin Encoders
 # Single-modality encoders for the hierarchical multimodal architecture
-# Adapted from VioPose (https://github.com/SeongJong-Yoo/VioPose)
+#  (https://github.com/Enotrium/Eldarin)
 
 from .visual_encoder import VisualEncoder
 from .event_encoder import EventEncoder

@@ -1,5 +1,5 @@
 # Eldarin Model Package
-# Adapted from VioPose (https://github.com/SeongJong-Yoo/VioPose)
+#  (https://github.com/Enotrium/Eldarin)
 # VSA/HDC integration from arthedain-1 (https://github.com/Enotrium/arthedain-1)
 # Event encoding from FPGA-Event-Based-encode (https://github.com/Enotrium/FPGA-Event-Based-encode)
 

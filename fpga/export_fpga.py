@@ -5,7 +5,7 @@ Exports Eldarin model for FPGA deployment via ONNX, TensorRT, and HLS C++.
 
 References:
   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
-  VioPose: https://github.com/SeongJong-Yoo/VioPose
+  
 """
 
 import torch

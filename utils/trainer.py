@@ -2,9 +2,9 @@
 Eldarin Trainer
 =================
 Training loop with mixed precision, checkpointing, and evaluation.
-Adapted from VioPose training pipeline.
+ training pipeline.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import torch

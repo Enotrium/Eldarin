@@ -2,7 +2,7 @@
 Eldarin Loss Functions
 =======================
 Combined detection + tracking + VSA/HDC consistency losses.
-Adapted from VioPose loss components.
+ loss components.
 
 Loss components:
   1. Box loss (IoU/GIoU)
@@ -12,7 +12,7 @@ Loss components:
   5. Temporal smoothness loss
   6. VSA/HDC consistency loss
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import torch

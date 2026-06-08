@@ -1,5 +1,5 @@
 # Eldarin Base Configuration
-# Adapted from VioPose hierarchical multimodal architecture
+#  hierarchical multimodal architecture
 # All paths and hyperparameters are configurable
 
 model:

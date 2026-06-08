@@ -6,7 +6,7 @@ Adapted from: https://github.com/Enotrium/arthedain-1
 Integrated into Eldarin for robust multimodal feature fusion, memory, and
 uncertainty handling in the hierarchical Bayesian-style mixing module.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 
 Core VSA/HDC operations:

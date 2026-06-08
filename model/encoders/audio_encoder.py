@@ -1,13 +1,13 @@
 """
 Audio Encoder for UAV environmental sounds
 ============================================
-Adapted from VioPose audio modality encoder (originally for violin audio).
+ audio modality encoder (originally for violin audio).
 Now processes propeller noise, environmental sounds, and other acoustic cues
 for cross-modal object type and motion priors.
 
 Uses CNN + attention over mel-spectrograms with optional pretrained models.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 
 Cross-modal causal cues: Audio can inform object type (e.g., vehicle engine,

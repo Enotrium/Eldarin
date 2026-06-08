@@ -1,7 +1,7 @@
 """
 Mixing Module — Bayesian-style Cross-modal Fusion with VSA/HDC
 ================================================================
-Adapted from VioPose's mixing module that performs Bayesian-style updates
+'s mixing module that performs Bayesian-style updates
 across modalities to handle uncertainty, missing data, and causal relationships.
 
 Enhanced with VSA/HDC operations from arthedain-1:
@@ -10,10 +10,10 @@ Enhanced with VSA/HDC operations from arthedain-1:
   - Posterior: Weighted bundle with uncertainty gating
   - Natural handling of missing modalities (sparse sensor data)
 
-This preserves VioPose's strength in leveraging cross-modal cues for
+This preserves Eldarin's strength in leveraging cross-modal cues for
 robust estimation under partial observations.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 VSA/HDC: https://github.com/Enotrium/arthedain-1
 """
@@ -88,7 +88,7 @@ class MixingModule(nn.Module):
     Bayesian-style mixing module for cross-modal fusion.
     Iteratively updates a unified representation using all available modalities.
 
-    From VioPose: Models priors from earlier/higher-level features and
+    From Eldarin: Models priors from earlier/higher-level features and
     uses likelihoods from each modality to produce posterior estimates.
     The HD-enhanced version operates in hyperdimensional space for
     robustness to noise and sparsity.

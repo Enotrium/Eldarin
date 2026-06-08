@@ -1,7 +1,7 @@
 """
 Eldarin — Complete Hierarchical Multimodal 4D Detection & Tracking Model
 =========================================================================
-Adapted from VioPose (https://github.com/SeongJong-Yoo/VioPose, https://arxiv.org/pdf/2411.13607)
+
 with integrations from:
   - FPGA-Event-Based-encode (https://github.com/Enotrium/FPGA-Event-Based-encode)
   - arthedain-1 VSA/HDC (https://github.com/Enotrium/arthedain-1)
@@ -18,7 +18,7 @@ Architecture:
   6. Digital Twin (HD virtual replica with predictive forward model)
   7. Swarm Consensus (multi-UAV collaborative fusion)
 
-The model preserves VioPose's core hierarchical multimodal approach
+The model preserves Eldarin's core hierarchical multimodal approach
 while adapting to UAV object detection and 4D tracking with
 event-based sensing, hyperdimensional computing, and swarm coordination.
 """

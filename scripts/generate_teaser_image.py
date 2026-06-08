@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Eldarin teaser image (Figure 1 style from VioPose project page).
+Generate Eldarin teaser image (Figure 1 style  project page).
 Shows UAV 4D object detection & tracking with detection boxes, trajectories,
 and multi-modal annotations.
 """
@@ -237,7 +237,7 @@ def generate_teaser():
             bbox=dict(facecolor='#1a1a2e', alpha=0.7, edgecolor='none', pad=8))
 
     # Subtitle
-    ax.text(320, 462, "Adapted from VioPose · Visual + Event + Audio + IMU · VSA/HDC · SNN",
+    ax.text(320, 462, " · Visual + Event + Audio + IMU · VSA/HDC · SNN",
             fontsize=10, color='#aaa', horizontalalignment='center',
             verticalalignment='bottom',
             bbox=dict(facecolor='#1a1a2e', alpha=0.5, edgecolor='none', pad=4))

@@ -5,7 +5,7 @@ Eldarin Training Script
 Main entry point for training the hierarchical multimodal 4D detection
 and tracking model for UAV applications.
 
-Adapted from VioPose (https://github.com/SeongJong-Yoo/VioPose, https://arxiv.org/pdf/2411.13607)
+
 Integrations:
   - FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
   - arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1

@@ -13,7 +13,7 @@ Process:
 References:
   FPGA-Event-Based-encode: https://github.com/Enotrium/FPGA-Event-Based-encode
   arthedain-1 VSA/HDC: https://github.com/Enotrium/arthedain-1
-  VioPose: https://github.com/SeongJong-Yoo/VioPose
+  
 """
 
 import torch

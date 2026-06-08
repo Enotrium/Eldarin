@@ -12,7 +12,7 @@ Supports multiple event representations:
   - Time surface (per-pixel latest timestamp)
   - Sparse spike tensors (direct SNN input)
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 """
 

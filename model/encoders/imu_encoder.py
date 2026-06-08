@@ -1,7 +1,7 @@
 """
 IMU / Auxiliary Sensor Encoder
 ================================
-Adapted from VioPose auxiliary feature paths.
+ auxiliary feature paths.
 Processes IMU (accelerometer, gyroscope, magnetometer) + optional GPS/pose data
 for motion-aware and position-aware feature extraction.
 
@@ -10,7 +10,7 @@ Provides:
   - Camera pose embedding
   - Temporal dynamics from IMU sequences
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 Paper: https://arxiv.org/pdf/2411.13607
 """
 

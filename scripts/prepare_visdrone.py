@@ -6,7 +6,7 @@ Converts VisDrone annotations to COCO JSON format for Eldarin training.
 Also generates basic statistics and data splits.
 
 VisDrone: https://github.com/VisDrone/VisDrone-Dataset
-Eldarin adaptation of VioPose: https://github.com/SeongJong-Yoo/VioPose
+Eldarin adaptation of 
 """
 
 import argparse

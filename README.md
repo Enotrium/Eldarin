@@ -1,8 +1,8 @@
 # Eldarin — Hierarchical Multimodal 4D Object Detection & Tracking for UAVs
 
-**Eldarin** is a complete adaptation of the [VioPose](https://github.com/SeongJong-Yoo/VioPose) framework, re-targeted from violin performance 4D human pose estimation to **UAV-based multi-object detection, localization, and 4D tracking** (3D position + velocity/trajectory over time) in dynamic, real-world environments.
+**Eldarin** is a **hierarchical multimodal 4D object detection and tracking system for UAVs**, delivering real-time multi-object detection, 3D localization, and 4D tracking (position + velocity/trajectory) in dynamic real-world environments.
 
-It preserves VioPose's core hierarchical audiovisual multimodal architecture while integrating:
+The architecture integrates:
 
 - **Event-based / neuromorphic sensing** via [FPGA-Event-Based-encode](https://github.com/Enotrium/FPGA-Event-Based-encode) for high-temporal-resolution, low-latency event stream processing
 - **Vector Symbolic Architectures (VSA) / Hyperdimensional Computing (HDC)** via the [arthedain-1](https://github.com/Enotrium/arthedain-1) VSA/HDC repository for robust hyperdimensional binding, bundling, and symbolic reasoning over sparse/noisy sensor data
@@ -15,7 +15,7 @@ It preserves VioPose's core hierarchical audiovisual multimodal architecture whi
 |---------|-------------|
 | **Hierarchical Multimodal Fusion** | Cascading high-level to low-level features across visual (RGB/event), audio, and IMU modalities |
 | **VSA/HDC Binding & Bundling** | Hyperdimensional representations for robust feature fusion, memory, and uncertainty handling |
-| **Bayesian-style Cross-modal Mixing** | Causal cross-modal updates from the original VioPose mixing module, enhanced with HDC operations |
+| **Bayesian-style Cross-modal Mixing** | Causal cross-modal updates enhanced with HDC operations |
 | **4D Tracking Head** | Joint object detection (bounding boxes, class probabilities) + 3D position + velocity/trajectory estimation |
 | **Event Camera Pipeline** | FPGA-optimized event encoding with SNN-compatible sparse representations |
 | **Real-time UAV Inference** | Optimized for onboard deployment with fp16/int8 quantization, TensorRT export, and SNN conversion |
@@ -73,6 +73,117 @@ It preserves VioPose's core hierarchical audiovisual multimodal architecture whi
               │   TensorRT, HLS)    │
               └─────────────────────┘
 ```
+
+## Visualizations
+
+Eldarin includes a complete 10-figure visualization suite inspired by the VioPose project page and Yan et al. (2026).
+
+Generate all figures:
+```bash
+python scripts/generate_figures.py --output_dir images/ --dpi 200
+```
+
+---
+
+### Figure 1: Full Eldarin System Architecture
+
+<p align="center">
+  <img src="images/01_system_architecture.png" alt="Eldarin System Architecture" width="900">
+</p>
+
+End-to-end architecture from multi-modal input (RGB, Event, Audio, IMU) through hierarchical encoding, VSA/HDC binding, Bayesian mixing, digital twin synchronization, swarm consensus, to 4D detection & tracking output, with FPGA/SNN deployment path.
+
+---
+
+### Figure 2: Multi-Modal Encoder Architecture
+
+<p align="center">
+  <img src="images/02_hierarchical_encoders.png" alt="Multi-modal Encoder Architecture" width="850">
+</p>
+
+Detailed architecture of the four encoder branches (Visual, Event, Audio, IMU) showing layer dimensions, feature extraction stages, and projection into hyperdimensional space (8192-dim) via VSA/HDC encoding.
+
+---
+
+### Figure 3: VSA/HDC Hyperdimensional Computing Operations
+
+<p align="center">
+  <img src="images/03_vsa_hdc_operations.png" alt="VSA/HDC Operations" width="850">
+</p>
+
+Core VSA/HDC primitives integrated from [arthedain-1](https://github.com/Enotrium/arthedain-1): Binding (⊗) for feature association, Bundling (⊕) for set representation, Permutation (ρ) for temporal encoding, and similarity computation. All operations are hardware-efficient (bitwise) for FPGA deployment.
+
+---
+
+### Figure 4: Digital Twin Framework
+
+<p align="center">
+  <img src="images/04_digital_twin.png" alt="Digital Twin Framework" width="850">
+</p>
+
+Digital twin framework adapted from [Yan et al. (2026)](https://www.nature.com/articles/s44172-025-00571-7) showing the bidirectional synchronization between physical UAV sensors and the hyperdimensional virtual replica. Features slot-based HD memory (64 slots) with role-filler binding for robust object tracking under occlusion.
+
+---
+
+### Figure 5: Multi-UAV Swarm Consensus Topology
+
+<p align="center">
+  <img src="images/05_swarm_consensus.png" alt="Multi-UAV Swarm Consensus" width="850">
+</p>
+
+Collaborative 4D perception across 4 UAV agents (1 leader + 3 followers) with communication links showing varying quality. Consensus process: compress → share → weight → update local digital twins. Virtual consensus twin provides shared agreed-upon representation.
+
+---
+
+### Figure 6: 4D Object Detection & Tracking
+
+<p align="center">
+  <img src="images/06_4d_detection_tracking.png" alt="4D Detection & Tracking" width="850">
+</p>
+
+Simulated UAV aerial view showing tracked objects (car, SUV, truck, bus, person) with detection boxes, tracking IDs, trajectory trails, and velocity arrows. Real-time tracking data panel shows 3D positions and velocities. Metrics: mAP@0.5=47.2%, MOTA=38.5%.
+
+---
+
+### Figure 7: Communication-Aware Adaptation
+
+<p align="center">
+  <img src="images/07_communication_adaptation.png" alt="Communication-Aware Adaptation" width="850">
+</p>
+
+Four-quadrant analysis: (a) Communication link quality over time with degradation threshold, (b) Adaptive modality weighting between local sensors and virtual twin, (c) Detection accuracy vs. link quality — digital twin maintains performance under poor communication, (d) Occlusion robustness — digital twin bounds tracking error during extended occlusion.
+
+---
+
+### Figure 8: FPGA Event Stream Encoding Pipeline
+
+<p align="center">
+  <img src="images/08_event_stream_pipeline.png" alt="FPGA Event Stream Pipeline" width="850">
+</p>
+
+FPGA-optimized event processing pipeline from [FPGA-Event-Based-encode](https://github.com/Enotrium/FPGA-Event-Based-encode): Polarity split → Spatial accumulation (BRAM histogram) → Log compression → Fixed-point quantization → Voxel/Frame output. Implementation targets Xilinx Vitis HLS with AXI-Stream input, dual BRAM accumulators, pipelined II=1 at 200 MHz.
+
+---
+
+### Figure 9: Ablation Studies & Performance Analysis
+
+<p align="center">
+  <img src="images/09_ablation_results.png" alt="Ablation Results" width="850">
+</p>
+
+Comprehensive evaluation: (a) Ablation study showing component contributions — VSA binding (+7.1% mAP), hierarchy (+4.4%), mixing (+3.7%), HD Kalman (+2.3%), (b) Training convergence — full Eldarin vs. no VSA binding, (c) Occlusion robustness — RGB+Event significantly outperforms RGB-only under high occlusion, (d) Inference speed comparison — FPGA SNN achieves 62 FPS at just 3.5W.
+
+---
+
+### Figure 10: UAV Hardware Deployment
+
+<p align="center">
+  <img src="images/10_uav_deployment.png" alt="UAV Hardware Deployment" width="850">
+</p>
+
+Real-world UAV deployment diagram showing sensor integration (RGB camera, event camera, microphone, IMU/GPS), onboard processing (FPGA accelerator + embedded GPU), communication links (5G/LoRa mesh), and ground control station. Deployment specs: <500g payload, 5-15W power, <33ms latency.
+
+---
 
 ## Installation
 
@@ -190,6 +301,7 @@ Eldarin/
 │   ├── mixing.py                # Bayesian-style mixing module
 │   ├── vsa_hdc.py               # VSA/HDC operations (binding, bundling)
 │   ├── heads.py                 # Detection + 4D tracking heads
+│   ├── digital_twin.py          # Digital Twin + Swarm Consensus
 │   └── snn_layers.py            # SNN-compatible layer definitions
 ├── utils/
 │   ├── __init__.py
@@ -214,22 +326,26 @@ Eldarin/
 │   ├── hls_kernels/             # HLS C++ kernel templates
 │   │   └── vsa_kernel.cpp
 │   └── snn_sim.py               # SNN simulation harness
+├── figures/                     # 10 interactive HTML figures
+├── images/                      # 10 static PNG figures
 ├── scripts/
 │   ├── download_datasets.sh     # Dataset download helper
 │   ├── prepare_visdrone.py      # VisDrone preprocessing
+│   ├── generate_figures.py      # PNG figure generator
+│   ├── generate_figures_html.py # Interactive HTML figure generator
 │   └── run_ablation.py          # Ablation study runner
 └── checkpoints/                 # Model weights directory
 ```
 
-## Key Adaptations from VioPose
+## Key Architecture Features
 
-### 1. Domain Shift: Violin Pose → UAV 4D Tracking
+### 1. Multi-Modal Fusion for 4D Tracking
 
-The original VioPose estimates 3D violin performance poses over time using 2D keypoints + audio. Eldarin replaces:
+Eldarin fuses RGB frames, event streams, audio, and IMU into a unified HD representation:
 
-- **Input**: 2D keypoints → RGB frames + event streams + optional audio/IMU
-- **Output**: 3D joint positions → Bounding boxes, class probabilities, 3D positions, velocities, trajectories
-- **Head**: Pose regression MLP → YOLO-style detection head + Kalman-inspired 4D tracking in hyperdimensional space
+- **Inputs**: RGB frames + event streams + optional audio/IMU
+- **Outputs**: Bounding boxes, class probabilities, 3D positions, velocities, trajectories
+- **Head**: YOLO-style detection head + HD Kalman-inspired temporal filtering
 
 ### 2. Event-based Encoding (FPGA-Event-Based-encode Integration)
 
@@ -260,15 +376,19 @@ The cascading high→low feature flow is augmented with VSA binding:
 - Creates hyperdimensional "role-filler" representations
 - Enables robust feature reconstruction under occlusion
 
-### 5. Mixing Module with Bayesian-HDC Updates
+### 5. Digital Twin & Swarm Consensus (Yan et al. 2026)
 
-The Bayesian-style cross-modal updates now operate in hyperdimensional space:
+Multi-UAV collaborative perception with virtual-physical synchronization. Maintains a hyperdimensional digital replica of the physical world with slot-based memory, predictive forward model (`twin(t+1) ≈ ρ(twin(t))`), and consensus-based fusion across UAV swarms under communication constraints.
+
+### 6. Mixing Module with Bayesian-HDC Updates
+
+The Bayesian-style cross-modal updates operate in hyperdimensional space:
 - Prior: HDC bundle of previous modalities
 - Likelihood: HDC encoding of new modality
 - Posterior: Weighted bundle with uncertainty gating
-- Natural handling of missing modalities (sparse sensor data)
+- Handles missing modalities (sparse sensor data) naturally
 
-### 6. SNN Conversion Paths
+### 7. SNN Conversion Paths
 
 For FPGA deployment:
 - ANN layers → IF/LIF neuron equivalents
@@ -279,16 +399,6 @@ For FPGA deployment:
 ## Citations
 
 If you use Eldarin in your research, please cite:
-
-### Core Framework
-```bibtex
-@article{yoo2024viopose,
-  title={VioPose: Hierarchical Audiovisual Multimodal Network for 4D Human Pose Estimation in Violin Performances},
-  author={Yoo, SeongJong and others},
-  journal={arXiv preprint arXiv:2411.13607},
-  year={2024}
-}
-```
 
 ### Event-based Encoding
 ```bibtex
@@ -352,4 +462,4 @@ Contributions welcome! Areas of particular interest:
 
 ---
 
-**Links**: [VioPose](https://github.com/SeongJong-Yoo/VioPose) | [VioPose Paper](https://arxiv.org/pdf/2411.13607) | [VioPose Project](https://sj-yoo.info/viopose/) | [FPGA Event Encode](https://github.com/Enotrium/FPGA-Event-Based-encode) | [arthedain-1 VSA/HDC](https://github.com/Enotrium/arthedain-1)
+**Links**: [FPGA Event Encode](https://github.com/Enotrium/FPGA-Event-Based-encode) | [arthedain-1 VSA/HDC](https://github.com/Enotrium/arthedain-1) | [Yan et al. (2026)](https://www.nature.com/articles/s44172-025-00571-7)

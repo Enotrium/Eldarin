@@ -15,7 +15,7 @@ Provides:
 This module is designed to be synthesized to HLS C++ for deployment
 on Xilinx/Intel FPGA platforms alongside the Eldarin SNN pipeline.
 
-Original VioPose: https://github.com/SeongJong-Yoo/VioPose
+
 """
 
 import numpy as np
