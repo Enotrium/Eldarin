@@ -44,6 +44,18 @@ model:
       max_age: 30           # Tracklet max age
       min_hits: 3           # Min detections to confirm track
 
+  # VSA-native reasoning path (Renner et al. 2024, arXiv:2209.02000)
+  vsa_native:
+    enabled: true
+    image_height: 480
+    image_width: 640
+    cartesian_factors: [64, 64]     # [h_bins, v_bins] for translation
+    logpolar_factors: [36]           # [angle_bins] for rotation
+    resonator_gamma: 0.3             # Update rate for resonator
+    resonator_nonlinearity: "phasor" # Cleanup nonlinearity
+    imu_fusion: true                 # FPE-based IMU prediction step
+    map_integration: true            # Anchored allocentric map
+
   # SNN config
   snn:
     enabled: false

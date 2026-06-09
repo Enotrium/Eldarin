@@ -20,6 +20,9 @@ The architecture integrates:
 | **Event Camera Pipeline** | FPGA-optimized event encoding with SNN-compatible sparse representations |
 | **Real-time UAV Inference** | Optimized for onboard deployment with fp16/int8 quantization, TensorRT export, and SNN conversion |
 | **Multi-dataset Support** | VisDrone, UAVDT, UAV3D, FRED (RGB+Event), and synthetic data pipelines |
+| **Fractional Power Encoding (FPE)** 🆕 | Continuous coordinate encoding from Renner et al. (2024, *Nature Machine Intelligence*); binding = addition in HD space |
+| **Resonator Networks** 🆕 | Training-free VSA-native factorization for translation, rotation, and scale; hierarchical resonator with anchored map memory |
+| **Map-Anchored Digital Twin** 🆕 | Allocentric world model with Eq. 9 anchoring prevents long-term drift; population vector readout for sub-pixel precision |
 
 ## Architecture Overview
 

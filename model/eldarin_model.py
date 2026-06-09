@@ -184,6 +184,42 @@ class Eldarin(nn.Module):
             feature_dim=feature_dims.get("visual", visual_dim),
         ) if swarm_cfg.get("enabled", False) else None
 
+        # --- VSA-native reasoning path (from Renner et al. 2024, arXiv:2209.02000) ---
+        vsa_native_cfg = model_cfg.get("vsa_native", {})
+        if vsa_native_cfg.get("enabled", True):
+            from .vsa_hdc import ResonatorNetwork, HierarchicalResonatorNetwork
+            from .fpe import FractionalPowerEncoder
+
+            self.fpe_encoder = FractionalPowerEncoder(
+                hd_dim=model_cfg.get("hd_dim", 8192),
+                min_val=0.0,
+                max_val=float(max(
+                    vsa_native_cfg.get("image_height", 480),
+                    vsa_native_cfg.get("image_width", 640),
+                )),
+                dtype=model_cfg.get("hd_dtype", "bipolar"),
+                seed=777,
+            )
+
+            self.resonator = HierarchicalResonatorNetwork(
+                cartesian_factors=vsa_native_cfg.get("cartesian_factors", [64, 64]),
+                logpolar_factors=vsa_native_cfg.get("logpolar_factors", [36]),
+                hd_dim=model_cfg.get("hd_dim", 8192),
+                gamma=vsa_native_cfg.get("resonator_gamma", 0.3),
+                nonlinearity=vsa_native_cfg.get("resonator_nonlinearity", "phasor"),
+                dtype=model_cfg.get("hd_dtype", "bipolar"),
+                seed=777,
+            )
+
+            # VSA-native IMU fusion (Eq. 10 from paper)
+            self.vsa_imu_enabled = vsa_native_cfg.get("imu_fusion", True)
+            self.vsa_map_integration = vsa_native_cfg.get("map_integration", True)
+        else:
+            self.fpe_encoder = None
+            self.resonator = None
+            self.vsa_imu_enabled = False
+            self.vsa_map_integration = False
+
         # SNN mode flag
         self.snn_mode = model_cfg.get("snn", {}).get("enabled", False)
 
@@ -460,6 +496,139 @@ class Eldarin(nn.Module):
         """
         out = self.forward(frames=frames, events=events)
         return out.get("hd_representation")
+
+    def vsa_native_odometry(
+        self,
+        image: torch.Tensor,
+        imu_reading: Optional[torch.Tensor] = None,
+        map_hd: Optional[torch.Tensor] = None,
+        num_resonator_iterations: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Training-free VSA-native visual odometry path.
+        Implements the approach from Renner et al. (2024), arXiv:2209.02000.
+
+        This bypasses all learned components and uses pure VSA/HDC operations:
+          1. FPE-encode the input image/event-frame
+          2. Optionally fuse IMU via FPE binding (Eq. 10)
+          3. Run hierarchical resonator to estimate translation + rotation
+          4. Update the allocentric map with anchoring (Eq. 8-9)
+          5. Read out via population vector (Eq. 7)
+
+        Args:
+            image: [B, H, W] binary/sparse image or event accumulation
+            imu_reading: Optional [B, 3] IMU (angular velocities or accelerations)
+            map_hd: Optional [B, hd_dim] previous allocentric map
+            num_resonator_iterations: Resonator convergence iterations
+
+        Returns:
+            Dict with:
+                - "translation": Estimated (h, v) in index space
+                - "rotation": Estimated rotation index
+                - "map": Updated allocentric map
+                - "cartesian_confidences": Factor confidence arrays
+                - "translation_hd": HD translation kernel
+        """
+        if self.fpe_encoder is None or self.resonator is None:
+            raise RuntimeError(
+                "VSA-native path not enabled. Set vsa_native.enabled=true in config."
+            )
+
+        device = image.device
+        B = image.shape[0]
+
+        # Step 1: FPE-encode the input image (Eq. 1-3)
+        # Build codebook if needed, or use direct FPE encoding
+        H, W = image.shape[-2], image.shape[-1]
+        codebook = self.fpe_encoder.build_codebook(H, W)
+        encoded_input = self.fpe_encoder.encode_image(image, codebook)  # [B, hd_dim]
+
+        # Step 2: IMU fusion via FPE binding (Eq. 10)
+        # r(t) = r(t-1) * seed^{IMU_reading}
+        if self.vsa_imu_enabled and imu_reading is not None:
+            # Use IMU to predict state before resonator iteration
+            imu_kernel = self.fpe_encoder.translation_kernel(
+                imu_reading[:, 0].mean(),  # Aggregate dx
+                imu_reading[:, 1].mean(),  # Aggregate dy
+            )
+            # Pre-rotate encoded input (simplified: bind IMU delta to input)
+            encoded_input = encoded_input * imu_kernel.unsqueeze(0)
+            encoded_input = F.normalize(encoded_input, p=2, dim=-1)
+
+        # Step 3: Run hierarchical resonator
+        resonator_out = self.resonator(
+            encoded_input=encoded_input,
+            encoded_map=map_hd,
+            num_iterations=num_resonator_iterations,
+        )
+
+        return resonator_out
+
+    def vsa_native_detect(
+        self,
+        image: torch.Tensor,
+        template_hd: Optional[torch.Tensor] = None,
+    ) -> Dict[str, Any]:
+        """
+        VSA-native object detection as transform factorization.
+        Uses the resonator to detect objects as "what" x "where" factorizations.
+
+        This is a novel extension of the Renner et al. approach:
+          - Template HD vectors encode "what" (object identities)
+          - Resonator network factorizes "where" (positions) from encoded scene
+          - Detection = which template + which position best compose the scene
+
+        Args:
+            image: [B, H, W] input image
+            template_hd: Optional [num_templates, hd_dim] pre-computed object templates
+
+        Returns:
+            Dict with detected objects: positions (population vector) + template matches
+        """
+        if self.fpe_encoder is None:
+            raise RuntimeError("VSA-native path not enabled.")
+
+        device = image.device
+        B = image.shape[0]
+        H, W = image.shape[-2], image.shape[-1]
+
+        codebook = self.fpe_encoder.build_codebook(H, W)
+        encoded = self.fpe_encoder.encode_image(image, codebook)  # [B, hd_dim]
+
+        if template_hd is not None:
+            # Resonator factorization: encoded = template ⊗ position
+            # Use a simple 2-factor resonator
+            from .vsa_hdc import ResonatorNetwork
+            simple_resonator = ResonatorNetwork(
+                factor_sizes=[template_hd.shape[0], H * W],
+                hd_dim=encoded.shape[-1],
+                gamma=0.3,
+                nonlinearity="phasor",
+            ).to(device)
+
+            # Set the template codebook
+            simple_resonator.codebooks[0] = torch.nn.Parameter(template_hd, requires_grad=False)
+            simple_resonator.decoders[0] = torch.nn.Parameter(template_hd.T, requires_grad=False)
+
+            result = simple_resonator(encoded, num_iterations=15)
+
+            # Population vector readout for positions
+            position_conf = result["factors"][1]  # [B, H*W]
+            pos_idx = simple_resonator.population_vector_readout(position_conf)
+
+            # Template matching
+            template_conf = result["factors"][0]  # [B, num_templates]
+            template_idx = template_conf.argmax(dim=-1)
+
+            return {
+                "positions": pos_idx,
+                "template_indices": template_idx,
+                "template_confidences": template_conf,
+                "position_confidences": position_conf,
+                "resonator_result": result,
+            }
+
+        return {"encoded": encoded}
 
 
 def create_eldarin(config_path: str = None, config_dict: dict = None, **kwargs) -> Eldarin:

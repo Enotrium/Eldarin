@@ -9,6 +9,7 @@ from .hierarchy import HierarchyModule
 from .mixing import MixingModule
 from .heads import DetectionHead, TrackingHead
 from .digital_twin import DigitalTwinState, SwarmConsensus, CommunicationAwareMixing
+from .fpe import FractionalPowerEncoder, FPEImageEncoder
 
 __all__ = [
     "Eldarin",
@@ -17,4 +18,5 @@ __all__ = [
     "MixingModule",
     "DetectionHead", "TrackingHead",
     "DigitalTwinState", "SwarmConsensus", "CommunicationAwareMixing",
+    "FractionalPowerEncoder", "FPEImageEncoder",
 ]

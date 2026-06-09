@@ -1,26 +1,34 @@
 """
 Digital Twin & Swarm Consensus Module
 =======================================
-Integrates concepts from Yan et al. (2026), Nature Communications Engineering:
-  "Digital twin-driven swarm of autonomous underwater vehicles for marine exploration"
-  https://www.nature.com/articles/s44172-025-00571-7
+Integrates concepts from two complementary research directions:
+
+1. Yan et al. (2026), Nature Communications Engineering:
+   "Digital twin-driven swarm of autonomous underwater vehicles for marine exploration"
+   https://www.nature.com/articles/s44172-025-00571-7
+
+2. Renner et al. (2024), Nature Machine Intelligence:
+   "Visual Odometry with Neuromorphic Resonator Networks"
+   arXiv: https://arxiv.org/abs/2209.02000
 
 Adapted for Eldarin's UAV 4D tracking:
-  1. Digital Twin — Synchronized virtual replica of physical UAV + tracked objects in HD space
-  2. Swarm Consensus — Multi-agent collaborative fusion via VSA/HDC bundling
-  3. Communication-aware weighting — Modality/agent weights based on link quality
-  4. Predictive virtual model — Fills gaps when physical observations drop (occlusion, comm loss)
+  1. Digital Twin - Synchronized virtual replica of physical UAV + tracked objects in HD space
+  2. Map Anchoring (Eq. 9 from 2209.02000) - Prevents long-term twin drift via anchor state
+  3. Swarm Consensus - Multi-agent collaborative fusion via VSA/HDC bundling
+  4. Communication-aware weighting - Modality/agent weights based on link quality
+  5. Predictive virtual model via HD permutation - twin(t+1) ~ rho(twin(t))
+  6. FPE-based continuous state encoding for ego-motion
 
 The digital twin maintains a hyperdimensional representation of:
   - Ego-UAV state (pose, velocity, sensor health)
   - Tracked object states (positions, velocities, trajectories)
   - Environmental context (scene semantics, weather, lighting)
+  - Allocentric map (persistent HD world model, anchored to initial state)
 
-Virtual ↔ Physical synchronization uses Bayesian-style updates in HD space,
-consistent with the existing MixingModule architecture .
+Virtual <-> Physical synchronization uses Bayesian-style updates in HD space,
+with map anchoring to prevent catastrophic forgetting and drift accumulation.
 
 Original references:
-  
   VSA/HDC: https://github.com/Enotrium/arthedain-1
   FPGA Event Encode: https://github.com/Enotrium/FPGA-Event-Based-encode
 """
@@ -43,6 +51,9 @@ class DigitalTwinState(nn.Module):
       - Environmental context vector (scene type, conditions)
       - Communication graph state (neighbor UAVs, link quality)
 
+    Enhanced with map anchoring from Renner et al. (2024) Eq. 9 to prevent
+    long-term temporal drift of the digital twin state.
+
     Uses VSA binding/permutation to encode structured relationships
     and enable efficient updates, retrieval, and cross-agent sharing.
     """
@@ -53,11 +64,13 @@ class DigitalTwinState(nn.Module):
         num_object_slots: int = 64,
         state_dim: int = 8,
         context_dim: int = 256,
+        use_map_anchoring: bool = True,
     ):
         super().__init__()
         self.hd_dim = hd_dim
         self.num_object_slots = num_object_slots
         self.state_dim = state_dim
+        self.use_map_anchoring = use_map_anchoring
 
         # VSA encoder for HD operations
         self.vsa = VSAHDC(
@@ -86,26 +99,26 @@ class DigitalTwinState(nn.Module):
         )
 
         # Current twin state (HD bundle of all components)
-        self.register_buffer(
-            "twin_state",
-            torch.zeros(hd_dim),
-        )
+        self.register_buffer("twin_state", torch.zeros(hd_dim))
+        # Allocentric anchor twin state (Eq. 9 from Renner et al. 2024)
+        self.register_buffer("anchor_twin", torch.zeros(hd_dim))
+        self._anchor_initialized = False
+
         # Component states for retrieval
         self.register_buffer("ego_hd", torch.zeros(hd_dim))
         self.register_buffer("context_hd", torch.zeros(hd_dim))
         self.register_buffer("slot_states", torch.zeros(num_object_slots, hd_dim))
 
         # Synchronization parameters
-        self.sync_decay = nn.Parameter(torch.tensor(0.95))  # Temporal smoothing
+        self.sync_decay = nn.Parameter(torch.tensor(0.95))  # mu_1 in Eq. 9: temporal smoothing
+        self.anchor_weight = nn.Parameter(torch.tensor(0.05))  # mu_2 in Eq. 9: anchor preservation
         self.confidence_threshold = nn.Parameter(torch.tensor(0.3))
 
     def _generate_role_vector(self, name: str, seed: int) -> torch.Tensor:
         """Generate a unique HD role vector."""
         gen = torch.Generator()
-        gen.manual_seed(hash(name) % (2**31) + seed)
-        return torch.bernoulli(
-            torch.full((self.hd_dim,), 0.5, generator=gen)
-        ) * 2 - 1  # Bipolar ±1
+        gen.manual_seed(hash(name) % (2 ** 31) + seed)
+        return (torch.rand(self.hd_dim, generator=gen) > 0.5).float() * 2 - 1
 
     def encode_ego_state(
         self, pose: torch.Tensor, velocity: torch.Tensor, sensor_health: float = 1.0
@@ -125,13 +138,15 @@ class DigitalTwinState(nn.Module):
             velocity = velocity.unsqueeze(0)
 
         # Concatenate state components
-        state = torch.cat([pose, velocity, torch.full_like(velocity[:, :1], sensor_health)], dim=-1)
+        state = torch.cat(
+            [pose, velocity, torch.full_like(velocity[:, :1], sensor_health)], dim=-1
+        )
 
         # Project to match VSA input dim
         if state.shape[-1] < self.vsa.input_dim:
             state = F.pad(state, (0, self.vsa.input_dim - state.shape[-1]))
         else:
-            state = state[:, :self.vsa.input_dim]
+            state = state[:, : self.vsa.input_dim]
 
         hd_state = self.vsa.encode(state)
         # Bind with ego role
@@ -165,7 +180,7 @@ class DigitalTwinState(nn.Module):
             if state.shape[-1] < self.vsa.input_dim:
                 state = F.pad(state, (0, self.vsa.input_dim - state.shape[-1]))
             else:
-                state = state[:self.vsa.input_dim]
+                state = state[: self.vsa.input_dim]
 
             hd_obj = self.vsa.encode(state.unsqueeze(0)).squeeze(0)
             # Bind object with slot role
@@ -214,9 +229,18 @@ class DigitalTwinState(nn.Module):
         sync_weights: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Update the full digital twin state via weighted HD bundling.
+        Update the full digital twin state via anchored HD bundling.
 
-        twin_state = w_ego * ego_hd ⊕ w_obj * obj_bundle ⊕ w_ctx * context_hd
+        Implements the anchored map update from Renner et al. (2024), Eq. 9:
+            twin(t+1) = mu_1 * twin(t) + mu_2 * anchor_twin + (1-mu_1-mu_2) * new_twin
+
+        where:
+            twin(t) is the running smoothed state
+            anchor_twin is the initial state (prevents long-term drift)
+            new_twin is the newly observed bundle
+
+        This prevents the digital twin from drifting away from the initial
+        world reference frame over long deployment periods.
 
         Args:
             ego_hd: Ego state HD vector
@@ -226,31 +250,50 @@ class DigitalTwinState(nn.Module):
         Returns:
             Updated twin state [hd_dim]
         """
-        if sync_weights is None:
-            sync_weights = torch.tensor([0.3, 0.5, 0.2], device=ego_hd.device)
+        device = ego_hd.device
 
+        if sync_weights is None:
+            sync_weights = torch.tensor([0.3, 0.5, 0.2], device=device)
+
+        # Build new observation bundle
         components = torch.stack([ego_hd, object_bundle, context_hd])
         new_twin = bundle(components, weights=sync_weights)
 
-        # Temporal smoothing
-        self.twin_state = (
-            self.sync_decay * self.twin_state.to(ego_hd.device)
-            + (1 - self.sync_decay) * new_twin
-        )
-        self.twin_state = F.normalize(self.twin_state, p=2, dim=-1)
+        # Move persistent buffers to correct device
+        twin = self.twin_state.to(device)
+
+        if self.use_map_anchoring:
+            # Initialize anchor on first call
+            if not self._anchor_initialized:
+                self.anchor_twin = new_twin.detach().clone()
+                self._anchor_initialized = True
+
+            anchor = self.anchor_twin.to(device)
+            # Eq. 9 anchored update
+            updated = (
+                self.sync_decay * twin
+                + self.anchor_weight * anchor
+                + (1 - self.sync_decay - self.anchor_weight) * new_twin
+            )
+        else:
+            # Simple temporal smoothing (no anchoring)
+            updated = self.sync_decay * twin + (1 - self.sync_decay) * new_twin
+
+        updated = F.normalize(updated, p=2, dim=-1)
+        self.twin_state = updated.detach()
 
         # Update component caches
-        self.ego_hd = ego_hd
-        self.context_hd = context_hd
+        self.ego_hd = ego_hd.detach() if ego_hd.dim() <= 1 else ego_hd.squeeze(0).detach()
+        self.context_hd = context_hd.detach() if context_hd.dim() <= 1 else context_hd.squeeze(0).detach()
 
-        return self.twin_state
+        return updated
 
     def retrieve_object(
         self, slot_idx: int, query_hd: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         Retrieve object state from a specific slot.
-        If query_hd is provided, uses unbinding: retrieve(bound, role) ≈ object.
+        If query_hd is provided, uses unbinding: retrieve(bound, role) ~ object.
 
         Args:
             slot_idx: Slot index
@@ -260,7 +303,7 @@ class DigitalTwinState(nn.Module):
         """
         slot_binding = self.slot_states[slot_idx]
         role = self.slot_roles[slot_idx]
-        # Unbind: slot_state ⊗ role^{-1} ≈ object
+        # Unbind: slot_state XOR role^{-1} ~ object
         retrieved = self.vsa.retrieve(slot_binding, role)
         return retrieved
 
@@ -268,7 +311,7 @@ class DigitalTwinState(nn.Module):
         """
         Predict future twin state using HD permutation (temporal dynamics).
 
-        twin(t+1) ≈ ρ(twin(t))  — permutation encodes forward time step
+        twin(t+1) ~ rho(twin(t))  -- permutation encodes forward time step
 
         Args:
             steps: Number of time steps to predict forward
@@ -279,6 +322,22 @@ class DigitalTwinState(nn.Module):
         for _ in range(steps):
             future = permute(future, 1)
         return future
+
+    def get_twin_drift(self) -> float:
+        """
+        Measure how much the twin has drifted from its anchor.
+        From the paper concept: if drift is high, re-anchoring may be needed.
+
+        Returns:
+            Cosine similarity between current twin and anchor [0, 1]
+        """
+        if not self._anchor_initialized:
+            return 1.0
+        return F.cosine_similarity(
+            self.twin_state.unsqueeze(0),
+            self.anchor_twin.unsqueeze(0),
+            dim=-1,
+        ).item()
 
     def forward(
         self,
@@ -291,7 +350,7 @@ class DigitalTwinState(nn.Module):
 
         ego_hd = self.encode_ego_state(
             ego_state[:, :7],
-            ego_state[:, 7:10] if ego_state.shape[1] >= 10 else torch.zeros(B, 3),
+            ego_state[:, 7:10] if ego_state.shape[1] >= 10 else torch.zeros(B, 3, device=ego_state.device),
         )
 
         obj_bundle = self.encode_objects(object_states)
@@ -307,6 +366,7 @@ class DigitalTwinState(nn.Module):
             "ego_hd": ego_hd,
             "object_bundle": obj_bundle,
             "context_hd": ctx_hd,
+            "twin_drift": self.get_twin_drift() if self.use_map_anchoring else 1.0,
         }
 
 
@@ -372,7 +432,9 @@ class SwarmConsensus(nn.Module):
         similarity structure (Johnson-Lindenstrauss property of HD vectors).
         """
         # Simple compression: sign of random projection
-        compressed = torch.sign(twin_state @ torch.randn_like(twin_state).T[:self.hd_dim // 8])
+        compressed = torch.sign(
+            twin_state @ torch.randn_like(twin_state).T[: self.hd_dim // 8]
+        )
         return compressed
 
     def decompress_twin(self, compressed: torch.Tensor) -> torch.Tensor:
@@ -407,12 +469,14 @@ class SwarmConsensus(nn.Module):
         else:
             link_qualities = [1.0] + list(link_qualities)
 
+        min_quality = 0.1
+
         for _ in range(self.consensus_rounds):
             # Weighted HD bundling
             weighted_bundle = torch.zeros(self.hd_dim, device=local_twin.device)
 
             for twin, quality in zip(all_twins, link_qualities):
-                if quality > self.vsa.uncertainty_threshold if hasattr(self.vsa, 'uncertainty_threshold') else 0.1:
+                if quality > min_quality:
                     weighted_bundle += quality * twin
 
             # Normalize (majority vote in bipolar space)
@@ -437,7 +501,7 @@ class SwarmConsensus(nn.Module):
 
         Args:
             local_twin: Local twin state
-            neighbor_data: Dict mapping agent_id → twin_state
+            neighbor_data: Dict mapping agent_id -> twin_state
         Returns:
             Dict with consensus_twin and agent_weights
         """
@@ -497,8 +561,8 @@ class CommunicationAwareMixing(nn.Module):
         """
         Mix local and virtual features based on communication quality.
 
-        When comm_quality is low → trust virtual model more
-        When comm_quality is high → trust local sensors more
+        When comm_quality is low -> trust virtual model more
+        When comm_quality is high -> trust local sensors more
 
         Args:
             local_features: Features from local sensors
