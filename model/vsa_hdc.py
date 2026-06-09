@@ -1019,7 +1019,100 @@ class HierarchicalResonatorNetwork(nn.Module):
             "logpolar_states": lp_states,
         }
 
-# Test utilities
+# =============================================================================
+# Sparse Binary Encoding with Context-Dependent Thinning (§2.6.2 Kanerva 2009)
+# =============================================================================
+# From Kanerva (2009), §2.6.2 ("Sparse Hypervectors"):
+#   "Sparse hypervectors are binary vectors with a small fraction of 1s.
+#    The binding operation can be based on the outer product or on
+#    context-dependent thinning [Rachkovskij & Kussul, 2001]."
+#
+# CDT preserves sparsity through binding by selecting active bits based
+# on the context provided by the binder vector.
+
+
+def sparse_bind(a: torch.Tensor, b: torch.Tensor, sparsity: float = 0.05) -> torch.Tensor:
+    """Context-dependent thinning for sparse binary vectors.
+
+    For each active bit in ``a``, cyclically shifts ``b`` by that bit's
+    index and OR‑accumulates.  The top‑k result bits are kept to maintain
+    target sparsity.  From Kanerva (2009) §2.6.2.
+    """
+    D = a.size(-1)
+    device = a.device
+    k = max(1, int(sparsity * D))
+    a_bin = (a > 0.5).float()
+    b_bin = (b > 0.5).float()
+
+    # Circular convolution via FFT (sparse-safe fallback for large dims)
+    a_fft = torch.fft.fft(a_bin.float(), dim=-1)
+    b_fft = torch.fft.fft(b_bin.float(), dim=-1)
+    result = torch.fft.ifft(a_fft * b_fft, dim=-1).real
+
+    # CDT threshold: top‑k
+    flat = result.view(-1, D)
+    sparse_result = torch.zeros_like(flat)
+    for i in range(flat.size(0)):
+        _, idx = torch.topk(flat[i], k, largest=True)
+        sparse_result[i, idx] = 1.0
+    return sparse_result.view_as(result)
+
+
+def sparse_bundle(vectors: torch.Tensor, sparsity: float = 0.05) -> torch.Tensor:
+    """Bundling for sparse binary vectors via OR + top‑k thresholding."""
+    D = vectors.size(-1)
+    k = max(1, int(sparsity * D))
+    summed = vectors.sum(dim=0)
+    _, topk_idx = torch.topk(summed, k, largest=True)
+    result = torch.zeros(D, device=vectors.device)
+    result.scatter_(-1, topk_idx, 1.0)
+    return result
+
+
+class SparseBinaryVSA(nn.Module):
+    """Sparse binary VSA backend (Kanerva 2009, §2.6.2).
+
+    All hypervectors are binary {0,1} with fixed sparsity.
+    Binding → context-dependent thinning; bundling → OR + top‑k;
+    similarity → Jaccard overlap.  Brain‑inspired sparse variant.
+    """
+
+    def __init__(self, hd_dim: int = 8192, sparsity: float = 0.05):
+        super().__init__()
+        self.hd_dim = hd_dim
+        self.sparsity = sparsity
+
+    def bind(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return sparse_bind(a, b, sparsity=self.sparsity)
+
+    def unbind(self, x: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return sparse_bind(x, b, sparsity=self.sparsity)
+
+    def bundle(self, vectors: torch.Tensor) -> torch.Tensor:
+        return sparse_bundle(vectors, sparsity=self.sparsity)
+
+    def permute(self, x: torch.Tensor, shifts: int = 1) -> torch.Tensor:
+        return x.roll(shifts=shifts, dims=-1)
+
+    def similarity(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        inter = (a * b).float().sum(dim=-1)
+        union = ((a + b) > 0).float().sum(dim=-1) + 1e-8
+        return inter / union
+
+    def random(self, size: tuple = (1,)) -> torch.Tensor:
+        flat_size = int(torch.prod(torch.tensor(size)).item())
+        k = max(1, int(self.sparsity * self.hd_dim))
+        vec = torch.zeros(flat_size, self.hd_dim)
+        for i in range(flat_size):
+            idx = torch.randperm(self.hd_dim)[:k]
+            vec[i, idx] = 1.0
+        return vec.reshape(*size, self.hd_dim)
+
+
+# =============================================================================
+# Tests
+# =============================================================================
+
 def test_vsa_operations():
     """Verify VSA algebra properties."""
     print("Testing VSA/HDC operations...")
@@ -1054,5 +1147,34 @@ def test_vsa_operations():
     print("VSA/HDC tests passed!\n")
 
 
+def test_sparse_vsa() -> None:
+    """Verify sparse binary VSA properties (Kanerva 2009 §2.6.2)."""
+    print("Testing Sparse Binary VSA (CDT binding) ...")
+
+    vsa = SparseBinaryVSA(hd_dim=2048, sparsity=0.05)
+    a = vsa.random((1,)).squeeze(0)
+    b = vsa.random((1,)).squeeze(0)
+
+    bound = vsa.bind(a, b)
+    sim_a = vsa.similarity(a, bound).item()
+    sim_b = vsa.similarity(b, bound).item()
+    print(f"  sim(a, a⊗b)={sim_a:.4f}, sim(b, a⊗b)={sim_b:.4f} (both ~0)")
+    assert sim_a < 0.3 and sim_b < 0.3
+
+    recovered = vsa.unbind(bound, b)
+    sim_rec = vsa.similarity(a, recovered).item()
+    print(f"  sim(a, unbind(a⊗b, b)) = {sim_rec:.4f}")
+    assert sim_rec > 0.05
+
+    bundle_vec = vsa.bundle(torch.stack([a, b]))
+    sim_ba = vsa.similarity(bundle_vec, a).item()
+    sim_bb = vsa.similarity(bundle_vec, b).item()
+    print(f"  sim(bundle, a)={sim_ba:.4f}, sim(bundle, b)={sim_bb:.4f}")
+    assert sim_ba > 0.0 and sim_bb > 0.0
+
+    print("Sparse VSA tests passed!\n")
+
+
 if __name__ == "__main__":
     test_vsa_operations()
+    test_sparse_vsa()
