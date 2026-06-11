@@ -3,6 +3,10 @@
 # VSA/HDC integration from arthedain-1 (https://github.com/Enotrium/arthedain-1)
 # Event encoding from FPGA-Event-Based-encode (https://github.com/Enotrium/FPGA-Event-Based-encode)
 #
+# This package contains the perception and detection model components.
+# The navigation stack (EKF, LQR, HDC-EVIO, HDC-SLAM, Path Planning) is in
+# the navigation/ package — see navigation/__init__.py and main_navigation.py.
+#
 # Kanerva (2009) extensions:
 #   model/sdm.py          — Sparse Distributed Memory (§2.4, §4)
 #   model/hdc_classifier.py — One-shot HDC classifier (§3.1.2) + Item Memory (§2.5)

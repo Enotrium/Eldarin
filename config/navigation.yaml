@@ -1,0 +1,135 @@
+# Navigation System Configuration
+# ================================
+# Master configuration for the three-domain autonomous navigation stack.
+# See neuromorphic-navigation-system-outline.md for architecture details.
+
+# ── Domain enable/disable ────────────────────────────────────────────────────
+mcu_enabled: true
+fpga_enabled: true
+cortex_a_enabled: true
+
+# ── Loop rates (Hz) ─────────────────────────────────────────────────────────
+mcu_inner_loop_hz: 1000.0       # EKF predict + LQR compute (hard real-time)
+cortex_a_evio_hz: 20.0          # HDC-EVIO correction emission rate
+cortex_a_slam_hz: 10.0          # HDC-SLAM landmark insertion rate
+cortex_a_planning_hz: 10.0      # Path planning waypoint generation
+
+# ── Safety timeouts ─────────────────────────────────────────────────────────
+mcu_can_stabilize_alone: true   # §2.1 invariant — EKF+LQR work without Cortex-A
+cortex_a_timeout_ms: 500        # Fall back to EKF-only if no Cortex-A heartbeat
+fpga_timeout_ms: 500            # Use optical-flow-only if FPGA silent
+
+# ── ESC ──────────────────────────────────────────────────────────────────────
+esc_protocol: "dshot600"
+
+# ── Extended Kalman Filter (MCU) ─────────────────────────────────────────────
+ekf:
+  pos_sigma: 1.0
+  vel_sigma: 0.5
+  att_sigma: 0.1
+  bias_a_sigma: 0.1
+  bias_g_sigma: 0.01
+  accel_noise: 0.5
+  gyro_noise: 0.01
+  bias_a_walk: 0.001
+  bias_g_walk: 0.0001
+  flow_noise: 0.1
+  range_noise: 0.05
+  baro_noise: 1.0
+  g: 9.81
+  max_position_residual: 2.0
+  max_velocity_residual: 1.0
+  max_attitude_residual: 0.5
+
+# ── HDC-EVIO (Cortex-A perception) ───────────────────────────────────────────
+hdc_evio:
+  hd_dim: 8192
+  image_height: 180
+  image_width: 240
+  cartesian_factors: [64, 64]
+  logpolar_factors: [36]
+  resonator_gamma: 0.3
+  resonator_nonlinearity: "phasor"
+  resonator_iterations: 10
+  hd_dtype: "bipolar"              # "bipolar" for NEON / "complex" for phasor proto
+  seed: 777
+  map_forgetting: 0.90
+  anchor_weight: 0.05
+  update_delay: 100
+  enable_imu_fusion: true
+  imu_weight: 0.3
+  correction_rate_hz: 20.0
+  position_cov: 0.05
+  velocity_cov: 0.1
+  attitude_cov: 0.005
+  use_bit_packed: false
+  recommended_core: 0
+
+# ── HDC-SLAM (Cortex-A mapping) ──────────────────────────────────────────────
+hdc_slam:
+  hd_dim: 8192
+  image_height: 180
+  image_width: 240
+  max_landmarks: 5000
+  min_landmark_distance: 0.5
+  landmark_confidence_threshold: 0.6
+  place_recognition_threshold: 0.75
+  num_candidate_places: 5
+  min_frames_between_loop_closures: 100
+  feature_dim: 128
+  hd_dtype: "bipolar"
+  seed: 777
+  use_bit_packed: true
+  recommended_core: 1
+
+# ── LQR Controller (MCU) ─────────────────────────────────────────────────────
+lqr:
+  mass_kg: 1.5
+  Ixx: 0.03
+  Iyy: 0.03
+  Izz: 0.05
+  arm_length_m: 0.25
+  max_thrust_per_motor: 10.0
+  min_thrust_per_motor: 0.0
+  hover_thrust: 0.25
+  Q_xy: 1.0
+  Q_z: 2.0
+  Q_vxy: 0.5
+  Q_vz: 1.0
+  Q_roll: 10.0
+  Q_pitch: 10.0
+  Q_yaw: 5.0
+  Q_p: 1.0
+  Q_q: 1.0
+  Q_r: 1.0
+  R_thrust: 0.1
+  R_roll: 0.1
+  R_pitch: 0.1
+  R_yaw: 0.1
+  max_roll_rad: 0.5236     # 30 deg
+  max_pitch_rad: 0.5236
+  max_yaw_rate: 1.5708
+  gravity: 9.81
+
+# ── Path Planner (Cortex-A planning) ─────────────────────────────────────────
+planner:
+  default_altitude_m: 50.0
+  default_speed_m_s: 5.0
+  acceptance_radius_m: 2.0
+  hold_time_s: 0.5
+  min_altitude_m: 5.0
+  max_altitude_m: 120.0
+  max_speed_m_s: 15.0
+  max_accel_m_s2: 5.0
+  obstacle_avoidance_enabled: true
+  obstacle_safety_radius_m: 5.0
+  obstacle_replan_interval_s: 2.0
+  max_obstacles: 100
+  coverage_row_spacing_m: 10.0
+  coverage_turn_radius_m: 15.0
+  payload_reactive: true
+  payload_loiter_time_s: 10.0
+  payload_approach_distance_m: 20.0
+  max_waypoints: 500
+  max_flight_time_s: 1800.0
+  home_position: [0.0, 0.0, 0.0]
