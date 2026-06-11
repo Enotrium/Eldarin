@@ -78,8 +78,8 @@ The architecture integrates:
         │  └────────┬─────────┘      │            │               │
         │           │                │   ┌────────▼────────┐      │
         │  ┌────────▼─────────┐      │   │  4D TRACKING    │      │
-        │  │ Ego-Motion       │      │   │  (HD Kalman +   │      │
-        │  │ Estimate (h,v,r) │      │   │Velocity + Traj) │      │
+        │  │ Ego-Motion       │      │   │   (HD Kalman +   │      │
+        │  │ Estimate (h,v,r) │      │   │ Velocity + Traj) │      │
         │  └──────────────────┘      │   └────────┬─────────┘      │
         │                            │            │                │
         └────────────────────────────┼────────────┘                │
