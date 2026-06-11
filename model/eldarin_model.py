@@ -23,20 +23,21 @@ while adapting to UAV object detection and 4D tracking with
 event-based sensing, hyperdimensional computing, and swarm coordination.
 """
 
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Any, Union
 
-from .encoders.visual_encoder import VisualEncoder
-from .encoders.event_encoder import EventEncoder
+from .digital_twin import CommunicationAwareMixing, DigitalTwinState, SwarmConsensus
 from .encoders.audio_encoder import AudioEncoder
+from .encoders.event_encoder import EventEncoder
 from .encoders.imu_encoder import IMUEncoder, PoseEncoder
+from .encoders.visual_encoder import VisualEncoder
+from .heads import DetectionHead, TrackingHead
 from .hierarchy import HierarchyModule
 from .mixing import MixingModule
-from .heads import DetectionHead, TrackingHead
 from .vsa_hdc import VSAHDC
-from .digital_twin import DigitalTwinState, SwarmConsensus, CommunicationAwareMixing
 
 
 class Eldarin(nn.Module):
@@ -163,40 +164,54 @@ class Eldarin(nn.Module):
 
         # --- Digital Twin (Yan et al. 2026, Nature CommsEng) ---
         twin_cfg = model_cfg.get("digital_twin", {})
-        self.digital_twin = DigitalTwinState(
-            hd_dim=model_cfg.get("hd_dim", 8192),
-            num_object_slots=twin_cfg.get("num_object_slots", 64),
-            state_dim=track_cfg.get("state_dim", 8),
-            context_dim=model_cfg.get("visual_dim", 1024),
-        ) if twin_cfg.get("enabled", True) else None
+        self.digital_twin = (
+            DigitalTwinState(
+                hd_dim=model_cfg.get("hd_dim", 8192),
+                num_object_slots=twin_cfg.get("num_object_slots", 64),
+                state_dim=track_cfg.get("state_dim", 8),
+                context_dim=model_cfg.get("visual_dim", 1024),
+            )
+            if twin_cfg.get("enabled", True)
+            else None
+        )
 
         # --- Swarm Consensus (Yan et al. 2026, Nature CommsEng) ---
         swarm_cfg = model_cfg.get("swarm", {})
-        self.swarm = SwarmConsensus(
-            num_agents=swarm_cfg.get("num_agents", 4),
-            hd_dim=model_cfg.get("hd_dim", 8192),
-            consensus_rounds=swarm_cfg.get("consensus_rounds", 3),
-        ) if swarm_cfg.get("enabled", False) else None
+        self.swarm = (
+            SwarmConsensus(
+                num_agents=swarm_cfg.get("num_agents", 4),
+                hd_dim=model_cfg.get("hd_dim", 8192),
+                consensus_rounds=swarm_cfg.get("consensus_rounds", 3),
+            )
+            if swarm_cfg.get("enabled", False)
+            else None
+        )
 
         # Communication-aware feature mixing
-        self.comm_aware_mixing = CommunicationAwareMixing(
-            hd_dim=model_cfg.get("hd_dim", 8192),
-            feature_dim=feature_dims.get("visual", visual_dim),
-        ) if swarm_cfg.get("enabled", False) else None
+        self.comm_aware_mixing = (
+            CommunicationAwareMixing(
+                hd_dim=model_cfg.get("hd_dim", 8192),
+                feature_dim=feature_dims.get("visual", visual_dim),
+            )
+            if swarm_cfg.get("enabled", False)
+            else None
+        )
 
         # --- VSA-native reasoning path (from Renner et al. 2024, arXiv:2209.02000) ---
         vsa_native_cfg = model_cfg.get("vsa_native", {})
         if vsa_native_cfg.get("enabled", True):
-            from .vsa_hdc import ResonatorNetwork, HierarchicalResonatorNetwork
             from .fpe import FractionalPowerEncoder
+            from .vsa_hdc import HierarchicalResonatorNetwork, ResonatorNetwork
 
             self.fpe_encoder = FractionalPowerEncoder(
                 hd_dim=model_cfg.get("hd_dim", 8192),
                 min_val=0.0,
-                max_val=float(max(
-                    vsa_native_cfg.get("image_height", 480),
-                    vsa_native_cfg.get("image_width", 640),
-                )),
+                max_val=float(
+                    max(
+                        vsa_native_cfg.get("image_height", 480),
+                        vsa_native_cfg.get("image_width", 640),
+                    )
+                ),
                 dtype=model_cfg.get("hd_dtype", "bipolar"),
                 seed=777,
             )
@@ -237,10 +252,10 @@ class Eldarin(nn.Module):
         """Initialize any un-initialized weights."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                if hasattr(m, 'weight') and not hasattr(m, '_initialized'):
-                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if hasattr(m, "weight") and not hasattr(m, "_initialized"):
+                    nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, nn.BatchNorm2d):
-                if hasattr(m, 'weight') and not hasattr(m, '_initialized'):
+                if hasattr(m, "weight") and not hasattr(m, "_initialized"):
                     nn.init.constant_(m.weight, 1)
                     nn.init.constant_(m.bias, 0)
 
@@ -355,7 +370,7 @@ class Eldarin(nn.Module):
             primary_multiscale = list(primary_multiscale) + [primary_multiscale[-1]] * (
                 self.hierarchy.num_levels - len(primary_multiscale)
             )
-        primary_multiscale = primary_multiscale[:self.hierarchy.num_levels]
+        primary_multiscale = primary_multiscale[: self.hierarchy.num_levels]
 
         # Average global features as global context
         if global_features:
@@ -414,11 +429,13 @@ class Eldarin(nn.Module):
         }
 
         if return_all:
-            result.update({
-                "encoded": encoded,
-                "hierarchy": hier_out,
-                "mixing": mix_out,
-            })
+            result.update(
+                {
+                    "encoded": encoded,
+                    "hierarchy": hier_out,
+                    "mixing": mix_out,
+                }
+            )
 
         return result
 
@@ -472,6 +489,7 @@ class Eldarin(nn.Module):
         Replaces activation functions with IF/LIF neurons.
         """
         from .snn_layers import SNNConversionHelper
+
         SNNConversionHelper.convert_relu_to_if(self)
         self.snn_mode = True
         return self
@@ -479,7 +497,7 @@ class Eldarin(nn.Module):
     def reset_snn_state(self):
         """Reset all SNN neuron membrane states."""
         for module in self.modules():
-            if hasattr(module, 'reset_state'):
+            if hasattr(module, "reset_state"):
                 module.reset_state()
 
     def get_vsa_representation(
@@ -534,7 +552,6 @@ class Eldarin(nn.Module):
                 "VSA-native path not enabled. Set vsa_native.enabled=true in config."
             )
 
-        device = image.device
         B = image.shape[0]
 
         # Step 1: FPE-encode the input image (Eq. 1-3)
@@ -599,6 +616,7 @@ class Eldarin(nn.Module):
             # Resonator factorization: encoded = template ⊗ position
             # Use a simple 2-factor resonator
             from .vsa_hdc import ResonatorNetwork
+
             simple_resonator = ResonatorNetwork(
                 factor_sizes=[template_hd.shape[0], H * W],
                 hd_dim=encoded.shape[-1],
@@ -646,7 +664,8 @@ def create_eldarin(config_path: str = None, config_dict: dict = None, **kwargs) 
     """
     if config_dict is None and config_path is not None:
         import yaml
-        with open(config_path, 'r') as f:
+
+        with open(config_path, "r") as f:
             config_dict = yaml.safe_load(f)
 
     if config_dict is None:

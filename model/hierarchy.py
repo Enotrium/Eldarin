@@ -17,10 +17,12 @@ Paper: https://arxiv.org/pdf/2411.13607
 VSA/HDC: https://github.com/Enotrium/arthedain-1
 """
 
+from typing import Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Dict, Optional, Tuple
+
 from .vsa_hdc import VSAHDC
 
 
@@ -148,7 +150,7 @@ class HierarchyModule(nn.Module):
 
     def __init__(
         self,
-        level_dims: List[int] = [2048, 1024, 512, 256],
+        level_dims: list[int] = [2048, 1024, 512, 256],
         use_vsa_binding: bool = True,
         hd_dim: int = 8192,
         dropout: float = 0.1,

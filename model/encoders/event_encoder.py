@@ -16,10 +16,11 @@ Supports multiple event representations:
 Paper: https://arxiv.org/pdf/2411.13607
 """
 
+from typing import Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, List, Dict
 
 
 class EventVoxelGrid(nn.Module):
@@ -44,9 +45,7 @@ class EventVoxelGrid(nn.Module):
         self.num_bins = num_bins
         self.normalize = normalize
 
-    def forward(
-        self, events: Tuple[torch.Tensor, ...], duration_us: float
-    ) -> torch.Tensor:
+    def forward(self, events: Tuple[torch.Tensor, ...], duration_us: float) -> torch.Tensor:
         """
         Convert events to voxel grid.
 
@@ -72,25 +71,21 @@ class EventVoxelGrid(nn.Module):
 
         # Separate polarity
         pos_mask = p > 0
-        neg_mask = ~pos_mask
 
-        voxel = torch.zeros(
-            1, self.num_bins, self.height, self.width, device=device
-        )
+        voxel = torch.zeros(1, self.num_bins, self.height, self.width, device=device)
 
         # Accumulate (FPGA-friendly: sparse indexed writes)
         for b in range(self.num_bins):
             mask = bin_idx == b
             if mask.any():
-                pos_count = pos_mask[mask].float().sum()
-                neg_count = neg_mask[mask].float().sum()
-                bin_val = pos_count - neg_count
                 # Scatter to spatial positions
                 coords = torch.stack([y[mask], x[mask]], dim=-1)
                 unique_coords, indices = torch.unique(coords, dim=0, return_inverse=True)
                 for i, (cy, cx) in enumerate(unique_coords):
                     if 0 <= cy < self.height and 0 <= cx < self.width:
-                        voxel[0, b, cy, cx] += (indices == i).float().sum() * (1 if pos_mask[mask].any() else -1)
+                        voxel[0, b, cy, cx] += (indices == i).float().sum() * (
+                            1 if pos_mask[mask].any() else -1
+                        )
 
         if self.normalize:
             voxel = voxel / (voxel.abs().max() + 1e-6)
@@ -109,9 +104,7 @@ class EventFrame(nn.Module):
         self.height = height
         self.width = width
 
-    def forward(
-        self, events: Tuple[torch.Tensor, ...]
-    ) -> torch.Tensor:
+    def forward(self, events: Tuple[torch.Tensor, ...]) -> torch.Tensor:
         """
         Convert events to 2-channel frame [B, 2, H, W].
 
@@ -157,9 +150,7 @@ class TimeSurface(nn.Module):
         self.height = height
         self.width = width
 
-    def forward(
-        self, events: Tuple[torch.Tensor, ...], duration_us: float
-    ) -> torch.Tensor:
+    def forward(self, events: Tuple[torch.Tensor, ...], duration_us: float) -> torch.Tensor:
         """
         Create time surface [1, 2, H, W] (pos/neg poles).
 
@@ -182,9 +173,7 @@ class TimeSurface(nn.Module):
             px, py = x[i].long().item(), y[i].long().item()
             if 0 <= py < self.height and 0 <= px < self.width:
                 ch = 0 if p[i] > 0 else 1
-                surface[0, ch, py, px] = max(
-                    surface[0, ch, py, px], t_norm[i]
-                )
+                surface[0, ch, py, px] = max(surface[0, ch, py, px], t_norm[i])
 
         return surface
 
@@ -244,10 +233,13 @@ class EventEncoder(nn.Module):
         self.backbone = self._build_backbone(in_channels, backbone_channels)
 
         # Feature pyramid for multi-scale
-        self.pyramid_layers = nn.ModuleList([
-            nn.Conv2d(c, out_dim // 4, 1)
-            for c in backbone_channels[-3:] if len(backbone_channels) >= 3
-        ])
+        self.pyramid_layers = nn.ModuleList(
+            [
+                nn.Conv2d(c, out_dim // 4, 1)
+                for c in backbone_channels[-3:]
+                if len(backbone_channels) >= 3
+            ]
+        )
 
         # Global descriptor
         self.global_pool = nn.AdaptiveAvgPool2d(1)
@@ -259,9 +251,7 @@ class EventEncoder(nn.Module):
 
         self._init_weights()
 
-    def _build_backbone(
-        self, in_channels: int, channels: List[int]
-    ) -> nn.ModuleList:
+    def _build_backbone(self, in_channels: int, channels: List[int]) -> nn.ModuleList:
         """Build lightweight CNN backbone for event features."""
         layers = []
         c_prev = in_channels
@@ -283,7 +273,7 @@ class EventEncoder(nn.Module):
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -335,9 +325,7 @@ class EventEncoder(nn.Module):
             "raw": feat if not self.use_sparse else None,
         }
 
-    def to_spikes(
-        self, features: torch.Tensor, threshold: float = 0.5
-    ) -> torch.Tensor:
+    def to_spikes(self, features: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
         """
         Convert continuous features to binary spikes for SNN input.
         Threshold-based rate coding.
@@ -393,7 +381,5 @@ class SparseEventEncoder(EventEncoder):
         # Quantize for FPGA
         if self.training:
             result["global"] = self.quantize_features(result["global"])
-            result["multiscale"] = [
-                self.quantize_features(f) for f in result["multiscale"]
-            ]
+            result["multiscale"] = [self.quantize_features(f) for f in result["multiscale"]]
         return result

@@ -24,11 +24,12 @@ Reference: Kanerva, P. (2009). "Hyperdimensional Computing: An Introduction
 to Computing in Distributed Representation with High-Dimensional Random Vectors"
 """
 
+from typing import Optional, Tuple, Union
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from typing import Optional, Tuple, Union
 
 
 class VSAHDC(nn.Module):
@@ -87,9 +88,7 @@ class VSAHDC(nn.Module):
         self.scale = nn.Parameter(torch.ones(1))
 
     @staticmethod
-    def _init_projection(
-        input_dim: int, hd_dim: int, dtype: str, seed: int
-    ) -> torch.Tensor:
+    def _init_projection(input_dim: int, hd_dim: int, dtype: str, seed: int) -> torch.Tensor:
         """Initialize projection matrix: feature space → HD space."""
         gen = torch.Generator()
         gen.manual_seed(seed)
@@ -115,9 +114,7 @@ class VSAHDC(nn.Module):
         return (torch.rand(hd_dim, generator=gen) > 0.5).float()
 
     @staticmethod
-    def _generate_permutation_basis(
-        hd_dim: int, dtype: str, seed: int
-    ) -> torch.Tensor:
+    def _generate_permutation_basis(hd_dim: int, dtype: str, seed: int) -> torch.Tensor:
         """Generate permutation basis vectors for temporal encoding."""
         gen = torch.Generator()
         gen.manual_seed(seed)
@@ -212,9 +209,7 @@ class VSAHDC(nn.Module):
             x_fft = torch.fft.fft(x.float(), dim=-1)
             N = self.hd_dim
             freqs = 2 * np.pi * shift / N
-            phase_shift = torch.exp(
-                1j * freqs * torch.arange(N // 2 + 1, device=x.device)
-            )
+            phase_shift = torch.exp(1j * freqs * torch.arange(N // 2 + 1, device=x.device))
             # Apply to both halves
             x_fft[..., : N // 2 + 1] *= phase_shift
             x_fft[..., N // 2 + 1 :] *= phase_shift[: N // 2 - 1].flip(-1).conj()
@@ -224,9 +219,7 @@ class VSAHDC(nn.Module):
             result = torch.roll(x, shifts=shift, dims=-1)
         return result
 
-    def temporal_bind(
-        self, sequence: torch.Tensor, use_permutation: bool = True
-    ) -> torch.Tensor:
+    def temporal_bind(self, sequence: torch.Tensor, use_permutation: bool = True) -> torch.Tensor:
         """
         Encode a temporal sequence of HD vectors using permutation.
         This captures ORDERED relationships (trajectory dynamics).
@@ -262,9 +255,7 @@ class VSAHDC(nn.Module):
                 return (a == b).float().mean(dim=-1)
         return F.cosine_similarity(a, b, dim=-1)
 
-    def hierarchical_bind(
-        self, high_level: torch.Tensor, low_level: torch.Tensor
-    ) -> torch.Tensor:
+    def hierarchical_bind(self, high_level: torch.Tensor, low_level: torch.Tensor) -> torch.Tensor:
         """
         Hierarchical binding: High-level semantics ⊗ Low-level features.
         This is the core VSA-enhanced operation in the Hierarchy Module,
@@ -308,9 +299,7 @@ class VSAHDC(nn.Module):
         else:
             effective_weight = prior_weight
 
-        posterior = (
-            effective_weight * prior + (1 - effective_weight) * likelihood
-        )
+        posterior = effective_weight * prior + (1 - effective_weight) * likelihood
         posterior = F.normalize(posterior, p=2, dim=-1)
 
         # Update uncertainty (entropy-like measure from similarity)
@@ -318,9 +307,7 @@ class VSAHDC(nn.Module):
 
         return posterior, new_uncertainty
 
-    def retrieve(
-        self, bound: torch.Tensor, cue: torch.Tensor
-    ) -> torch.Tensor:
+    def retrieve(self, bound: torch.Tensor, cue: torch.Tensor) -> torch.Tensor:
         """
         Retrieve an item from a bound pair: if bound = a ⊗ b, then
         retrieve(bound, a) ≈ b (unbinding).
@@ -367,6 +354,7 @@ class VSAHDC(nn.Module):
 
 # ----- Functional API (for use outside the module) -----
 
+
 def bind(a: torch.Tensor, b: torch.Tensor, mode: str = "circular") -> torch.Tensor:
     """Functional binding: a ⊗ b"""
     if mode == "circular":
@@ -376,9 +364,7 @@ def bind(a: torch.Tensor, b: torch.Tensor, mode: str = "circular") -> torch.Tens
     return a * b  # XOR for bipolar
 
 
-def bundle(
-    vectors: torch.Tensor, weights: Optional[torch.Tensor] = None
-) -> torch.Tensor:
+def bundle(vectors: torch.Tensor, weights: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Functional bundling: Σ vectors"""
     if weights is not None:
         vectors = vectors * F.softmax(weights, dim=0).unsqueeze(-1)
@@ -428,9 +414,7 @@ class HDCKalmanFilter(nn.Module):
         gen.manual_seed(1234)
         if dtype == "bipolar":
             self.state_basis = nn.Parameter(
-                torch.bernoulli(
-                    torch.full((state_dim, hd_dim), 0.5, generator=gen)
-                ) * 2 - 1,
+                torch.bernoulli(torch.full((state_dim, hd_dim), 0.5, generator=gen)) * 2 - 1,
                 requires_grad=False,
             )
 
@@ -450,7 +434,12 @@ class HDCKalmanFilter(nn.Module):
             basis = self.state_basis[d : d + 1]
             value = state[:, d : d + 1]
             hs.append(basis * value * self.hd_dim)
-        return bundle(torch.cat(hs, dim=0).reshape(self.state_dim, -1, self.hd_dim).transpose(0, 1).reshape(-1, self.hd_dim))
+        return bundle(
+            torch.cat(hs, dim=0)
+            .reshape(self.state_dim, -1, self.hd_dim)
+            .transpose(0, 1)
+            .reshape(-1, self.hd_dim)
+        )
 
     def predict(self, hd_state: torch.Tensor) -> torch.Tensor:
         """Predict next state in HD space."""
@@ -458,9 +447,7 @@ class HDCKalmanFilter(nn.Module):
         predicted = permute(hd_state, 1) * self.transition_weight
         return F.normalize(predicted + hd_state * (1 - self.transition_weight), p=2, dim=-1)
 
-    def update(
-        self, hd_state: torch.Tensor, measurement: torch.Tensor
-    ) -> torch.Tensor:
+    def update(self, hd_state: torch.Tensor, measurement: torch.Tensor) -> torch.Tensor:
         """Update state with measurement in HD space."""
         updated = hd_state * (1 - self.measurement_weight) + measurement * self.measurement_weight
         return F.normalize(updated, p=2, dim=-1)
@@ -472,10 +459,7 @@ class HDCKalmanFilter(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Kalman filter step in HD space."""
         pred = self.predict(prev_hd_state)
-        if measurement is not None:
-            posterior = self.update(pred, measurement)
-        else:
-            posterior = pred
+        posterior = self.update(pred, measurement) if measurement is not None else pred
         return posterior, pred
 
 
@@ -492,6 +476,7 @@ class HDCKalmanFilter(nn.Module):
 #   - Pattern recognition invariant to geometric transforms
 #   - Efficient search over combinatorial factor spaces
 # =============================================================================
+
 
 class ResonatorNetwork(nn.Module):
     """
@@ -536,17 +521,13 @@ class ResonatorNetwork(nn.Module):
         for i, size in enumerate(factor_sizes):
             gen.manual_seed(seed + i * 1000)
             cb = (torch.rand(size, hd_dim, generator=gen) > 0.5).float() * 2 - 1
-            self.codebooks.append(
-                nn.Parameter(cb, requires_grad=False)
-            )
+            self.codebooks.append(nn.Parameter(cb, requires_grad=False))
 
         # Decoding matrices (transpose of codebooks for efficient readout)
         # For bipolar: decode = codebook.T (since ±1, transpose ≈ pseudoinverse)
         self.decoders = nn.ParameterList()
         for cb in self.codebooks:
-            self.decoders.append(
-                nn.Parameter(cb.T.clone(), requires_grad=False)
-            )
+            self.decoders.append(nn.Parameter(cb.T.clone(), requires_grad=False))
 
     def cleanup(self, state: torch.Tensor, factor_idx: int) -> torch.Tensor:
         """
@@ -568,7 +549,7 @@ class ResonatorNetwork(nn.Module):
             [B, hd_dim] cleaned factor
         """
         codebook = self.codebooks[factor_idx]  # [size, hd_dim]
-        decoder = self.decoders[factor_idx]     # [hd_dim, size]
+        decoder = self.decoders[factor_idx]  # [hd_dim, size]
 
         # Decode: compute similarities
         # raw_state @ decoder = [B, hd_dim] @ [hd_dim, size] = [B, size]
@@ -659,9 +640,7 @@ class ResonatorNetwork(nn.Module):
                 cleaned = self.cleanup(query, factor_idx)
 
                 # Update with smoothing (γ parameter, from paper Eq. 4)
-                states[factor_idx] = (
-                    (1 - self.gamma) * states[factor_idx] + self.gamma * cleaned
-                )
+                states[factor_idx] = (1 - self.gamma) * states[factor_idx] + self.gamma * cleaned
                 states[factor_idx] = F.normalize(states[factor_idx], p=2, dim=-1)
 
             if history is not None:
@@ -682,7 +661,9 @@ class ResonatorNetwork(nn.Module):
 
         return result
 
-    def population_vector_readout(self, confidences: torch.Tensor, indices: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def population_vector_readout(
+        self, confidences: torch.Tensor, indices: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Population vector readout for sub-index resolution.
         From the paper (Eq. 7): computes the similarity-weighted average of indices
@@ -923,29 +904,29 @@ class HierarchicalResonatorNetwork(nn.Module):
         # Cartesian: estimate translation h, v
         cart_states = [
             F.normalize(
-                self.cartesian_resonator.codebooks[0][torch.randint(
-                    0, self.cartesian_resonator.factor_sizes[0], (B,),
-                    device=device
-                )],
-                p=2, dim=-1
+                self.cartesian_resonator.codebooks[0][
+                    torch.randint(0, self.cartesian_resonator.factor_sizes[0], (B,), device=device)
+                ],
+                p=2,
+                dim=-1,
             ),
             F.normalize(
-                self.cartesian_resonator.codebooks[1][torch.randint(
-                    0, self.cartesian_resonator.factor_sizes[1], (B,),
-                    device=device
-                )],
-                p=2, dim=-1
+                self.cartesian_resonator.codebooks[1][
+                    torch.randint(0, self.cartesian_resonator.factor_sizes[1], (B,), device=device)
+                ],
+                p=2,
+                dim=-1,
             ),
         ]
 
         # Log-polar: estimate rotation r
         lp_states = [
             F.normalize(
-                self.logpolar_resonator.codebooks[0][torch.randint(
-                    0, self.logpolar_resonator.factor_sizes[0], (B,),
-                    device=device
-                )],
-                p=2, dim=-1
+                self.logpolar_resonator.codebooks[0][
+                    torch.randint(0, self.logpolar_resonator.factor_sizes[0], (B,), device=device)
+                ],
+                p=2,
+                dim=-1,
             ),
         ]
 
@@ -1018,6 +999,7 @@ class HierarchicalResonatorNetwork(nn.Module):
             "cartesian_states": cart_states,
             "logpolar_states": lp_states,
         }
+
 
 # =============================================================================
 # Sparse Binary Encoding with Context-Dependent Thinning (§2.6.2 Kanerva 2009)
@@ -1113,6 +1095,7 @@ class SparseBinaryVSA(nn.Module):
 # Tests
 # =============================================================================
 
+
 def test_vsa_operations():
     """Verify VSA algebra properties."""
     print("Testing VSA/HDC operations...")
@@ -1135,14 +1118,18 @@ def test_vsa_operations():
     sim_a = vsa.similarity(bundle_ab, a)
     sim_b = vsa.similarity(bundle_ab, b)
     sim_c = vsa.similarity(bundle_ab, c)
-    print(f"  Bundle similarity: sim(bundle, a)={sim_a:.4f}, sim(bundle, b)={sim_b:.4f}, sim(bundle, c)={sim_c:.4f}")
+    print(
+        f"  Bundle similarity: sim(bundle, a)={sim_a:.4f}, sim(bundle, b)={sim_b:.4f}, sim(bundle, c)={sim_c:.4f}"
+    )
 
     # Test 3: Temporal encoding
     seq = torch.stack([a, b, c])
     temporal = vsa.temporal_bind(seq)
     sim_a0 = vsa.similarity(temporal, a)
     sim_perm = vsa.similarity(temporal, vsa.permute(b, 1))
-    print(f"  Temporal encoding: sim(seq_encoded, a)={sim_a0:.4f}, sim(seq_encoded, ρ¹(b))={sim_perm:.4f}")
+    print(
+        f"  Temporal encoding: sim(seq_encoded, a)={sim_a0:.4f}, sim(seq_encoded, ρ¹(b))={sim_perm:.4f}"
+    )
 
     print("VSA/HDC tests passed!\n")
 

@@ -14,10 +14,11 @@ Provides:
 Paper: https://arxiv.org/pdf/2411.13607
 """
 
+from typing import Dict, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional
 
 
 class IMUEncoder(nn.Module):
@@ -109,14 +110,12 @@ class IMUEncoder(nn.Module):
 
         # 1D CNN over IMU sequence
         imu_t = imu_data.transpose(1, 2)  # [B, D, T]
-        imu_feat = self.imu_cnn(imu_t)     # [B, hidden_dim, T]
+        imu_feat = self.imu_cnn(imu_t)  # [B, hidden_dim, T]
         imu_feat = imu_feat.transpose(1, 2)  # [B, T, hidden_dim]
 
         # Concatenate auxiliary data if available
-        if aux_data is not None:
-            combined = torch.cat([imu_feat, aux_data], dim=-1)
-        else:
-            combined = imu_feat
+
+        combined = torch.cat([imu_feat, aux_data], dim=-1) if aux_data is not None else imu_feat
 
         # LSTM
         lstm_out, (h_n, c_n) = self.lstm(combined)  # [B, T, hidden_dim*2]
