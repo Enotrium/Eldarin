@@ -28,6 +28,7 @@ import argparse
 import yaml
 import torch
 import sys
+import logging
 from pathlib import Path
 
 # Add project root to path
@@ -37,7 +38,14 @@ from model.eldarin_model import create_eldarin
 from model.vsa_hdc import test_vsa_operations
 from utils.data_loader import create_dataloader
 from utils.loss import EldarinLoss
+from utils.metrics import DetectionMetrics, compute_mAP
 from utils.trainer import Trainer
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
+logger = logging.getLogger(__name__)
 
 
 def parse_args():
@@ -90,6 +98,96 @@ def parse_args():
     return parser.parse_args()
 
 
+def run_validation(model, val_loader, device, num_classes: int = 10):
+    """
+    Run a proper validation pass computing mAP and MOTA metrics.
+
+    This replaces the previous placeholder that used torch.rand.
+    """
+    from utils.metrics import DetectionMetrics, compute_mAP
+
+    det_metrics = DetectionMetrics(num_classes=num_classes)
+
+    model.eval()
+    for batch_idx, batch in enumerate(val_loader):
+        # Move data to device
+        frames = batch.get("frames")
+        if isinstance(frames, torch.Tensor):
+            frames = frames.to(device)
+
+        events = batch.get("events")
+        if isinstance(events, tuple):
+            events = tuple(e.to(device) if isinstance(e, torch.Tensor) else e for e in events)
+
+        with torch.no_grad():
+            predictions = model(
+                frames=frames,
+                events=events,
+            )
+
+        # Extract detections from predictions
+        det_out = predictions.get("detection", {})
+        if not det_out:
+            continue
+
+        bbox_pred = det_out.get("bbox", None)
+        cls_pred = det_out.get("cls", None)
+        obj_pred = det_out.get("obj", None)
+
+        if bbox_pred is None or bbox_pred.numel() == 0:
+            continue
+
+        # Build detection tensor for metrics
+        # Format: [N, 6] (x1, y1, x2, y2, conf, cls)
+        bbox_np = bbox_pred.reshape(-1, 4).cpu().numpy()
+        conf_np = torch.sigmoid(obj_pred.reshape(-1)).cpu().numpy() if obj_pred is not None and obj_pred.numel() > 0 else np.ones(bbox_np.shape[0])
+
+        if cls_pred is not None and cls_pred.numel() > 0:
+            cls_flat = cls_pred.reshape(-1, cls_pred.shape[-1])
+            cls_ids = cls_flat.argmax(-1).cpu().numpy()
+        else:
+            cls_ids = np.zeros(bbox_np.shape[0], dtype=np.int64)
+
+        # Filter confident detections
+        conf_thresh = 0.25
+        keep = conf_np > conf_thresh
+
+        dets = np.concatenate([
+            bbox_np[keep],
+            conf_np[keep, np.newaxis],
+            cls_ids[keep, np.newaxis].astype(np.float32),
+        ], axis=1) if keep.sum() > 0 else np.zeros((0, 6))
+
+        # Get targets
+        targets_data = batch.get("targets", {})
+        if isinstance(targets_data, dict):
+            gt_bboxes = targets_data.get("bboxes", torch.zeros(0, 4))
+            gt_classes = targets_data.get("classes", torch.zeros(0, dtype=torch.long))
+            if gt_bboxes.numel() > 0:
+                gts = torch.cat([
+                    gt_bboxes.cpu(),
+                    gt_classes.cpu().float().unsqueeze(-1),
+                ], dim=1)
+            else:
+                gts = torch.zeros(0, 5)
+        else:
+            gts = torch.zeros(0, 5)
+
+        det_metrics.update(
+            torch.from_numpy(dets),
+            gts,
+        )
+
+        if batch_idx % 50 == 0:
+            logger.info(f"Validation batch {batch_idx}/{len(val_loader)}")
+
+    results = det_metrics.compute()
+    logger.info(f"Validation Results: mAP={results['mAP']:.2f}%, "
+                f"Precision={results['precision']:.2f}%, "
+                f"Recall={results['recall']:.2f}%")
+    return results
+
+
 def main():
     args = parse_args()
 
@@ -119,19 +217,19 @@ def main():
     device = args.device
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
-        print("CUDA not available, falling back to CPU")
+        logger.warning("CUDA not available, falling back to CPU")
 
     # Create model
-    print("Building Eldarin model...")
+    logger.info("Building Eldarin model...")
     model = create_eldarin(config_dict=config)
     model.to(device)
 
     param_count = sum(p.numel() for p in model.parameters())
     trainable_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model parameters: {param_count/1e6:.2f}M total, {trainable_count/1e6:.2f}M trainable")
+    logger.info(f"Model parameters: {param_count/1e6:.2f}M total, {trainable_count/1e6:.2f}M trainable")
 
     # Data loaders
-    print("Loading datasets...")
+    logger.info("Loading datasets...")
     train_loader = create_dataloader(config, split="train")
 
     val_loader = None
@@ -142,40 +240,29 @@ def main():
         val_config["data"]["data_root"] = val_root
         try:
             val_loader = create_dataloader(val_config, split="val")
-            print(f"Validation samples: {len(val_loader.dataset)}")
+            logger.info(f"Validation samples: {len(val_loader.dataset)}")
         except Exception as e:
-            print(f"No validation data found: {e}")
+            logger.warning(f"No validation data found: {e}")
 
-    # Validation-only mode
+    # Validation-only mode — proper evaluation with real metrics
     if args.val_only:
+        import numpy as np  # needed for eval
         checkpoint_path = args.checkpoint or args.resume
         if checkpoint_path is None:
-            print("Error: --checkpoint required for --val_only")
+            logger.error("Error: --checkpoint required for --val_only")
             sys.exit(1)
 
+        logger.info(f"Loading checkpoint: {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
-        model.eval()
 
-        from utils.metrics import DetectionMetrics, compute_mAP
-        det_metrics = DetectionMetrics()
+        eval_loader = val_loader or train_loader
+        if eval_loader is None:
+            logger.error("No data loader available for validation")
+            sys.exit(1)
 
-        for batch in val_loader or train_loader:
-            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            with torch.no_grad():
-                pred = model(frames=batch.get("frames"))
-            # Update metrics (simplified)
-            if "targets" in batch:
-                targets = batch["targets"]
-                if isinstance(targets, list):
-                    for tgt in targets:
-                        det_metrics.update(
-                            torch.rand(0, 6),  # Placeholder
-                            tgt.get("bboxes", torch.zeros(0, 4))
-                        )
-
-        results = det_metrics.compute()
-        print(f"Validation Results: mAP={results['mAP']:.2f}%")
+        num_classes = config.get("data", {}).get("num_classes", 10)
+        results = run_validation(model, eval_loader, device, num_classes)
         return
 
     # Loss function
@@ -215,25 +302,25 @@ def main():
     # Resume
     resume_from = args.resume or args.checkpoint
     if resume_from:
-        print(f"Resuming from {resume_from}")
+        logger.info(f"Resuming from {resume_from}")
         trainer.load_checkpoint(resume_from)
 
     # Train
     try:
         trainer.train(resume_from=resume_from if not resume_from else None)
     except KeyboardInterrupt:
-        print("\nTraining interrupted. Saving checkpoint...")
+        logger.info("\nTraining interrupted. Saving checkpoint...")
         trainer.save_checkpoint("interrupted.pth")
-        print("Checkpoint saved.")
+        logger.info("Checkpoint saved.")
 
     # SNN conversion
     if args.convert_snn:
-        print("Converting to SNN...")
+        logger.info("Converting to SNN...")
         model.to_snn()
         trainer.save_checkpoint("eldarin_snn.pth")
-        print("SNN model saved to checkpoints/eldarin_snn.pth")
+        logger.info("SNN model saved to checkpoints/eldarin_snn.pth")
 
-    print("\nTraining complete!")
+    logger.info("\nTraining complete!")
 
 
 if __name__ == "__main__":

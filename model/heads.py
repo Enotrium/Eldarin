@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Dict, Tuple, Optional
+from scipy.optimize import linear_sum_assignment
 from .vsa_hdc import HDCKalmanFilter, VSAHDC
 
 
@@ -242,6 +243,74 @@ class TrackingHead(nn.Module):
         """
         return self.reid_proj(features)
 
+    def _compute_similarity_matrix(
+        self,
+        detections: torch.Tensor,
+        detection_features: torch.Tensor,
+        track_states: List[Dict],
+    ) -> torch.Tensor:
+        """
+        Compute similarity matrix between detections and tracks using both
+        HD appearance similarity and IoU from state vectors.
+
+        Returns:
+            cost_matrix: [N_det, N_trk] where lower values = better match
+        """
+        N_det = detections.shape[0]
+        N_trk = len(track_states)
+
+        # Encode detections to HD
+        det_hd = self.vsa_matcher.encode(detection_features)  # [N_det, hd_dim]
+
+        # Get track HD states
+        trk_hd = torch.stack([t["hd_state"] for t in track_states], dim=0)  # [N_trk, hd_dim]
+
+        # HD cosine similarity → convert to cost (1 - sim)
+        hd_sim = F.cosine_similarity(
+            det_hd.unsqueeze(1), trk_hd.unsqueeze(0), dim=2
+        )  # [N_det, N_trk]
+        hd_cost = 1 - hd_sim  # [N_det, N_trk]
+
+        # IoU cost from bbox states
+        det_boxes = detections[:, :4]  # [N_det, 4]
+        trk_boxes = torch.stack([t["state"][:4] for t in track_states], dim=0)  # [N_trk, 4]
+
+        # Compute pairwise IoU
+        if N_det > 0 and N_trk > 0:
+            # Convert to corner format
+            det_corners = torch.cat([
+                det_boxes[:, :2] - det_boxes[:, 2:4] / 2,
+                det_boxes[:, :2] + det_boxes[:, 2:4] / 2,
+            ], dim=-1)
+            trk_corners = torch.cat([
+                trk_boxes[:, :2] - trk_boxes[:, 2:4] / 2,
+                trk_boxes[:, :2] + trk_boxes[:, 2:4] / 2,
+            ], dim=-1)
+
+            lt = torch.max(det_corners[:, None, :2], trk_corners[None, :, :2])
+            rb = torch.min(det_corners[:, None, 2:], trk_corners[None, :, 2:])
+            wh = (rb - lt).clamp(min=0)
+            inter = wh[:, :, 0] * wh[:, :, 1]
+
+            area_det = (
+                (det_corners[:, 2] - det_corners[:, 0])
+                * (det_corners[:, 3] - det_corners[:, 1])
+            )
+            area_trk = (
+                (trk_corners[:, 2] - trk_corners[:, 0])
+                * (trk_corners[:, 3] - trk_corners[:, 1])
+            )
+            union = area_det[:, None] + area_trk[None, :] - inter + 1e-6
+            iou = inter / union  # [N_det, N_trk]
+            iou_cost = 1 - iou
+        else:
+            iou_cost = hd_cost
+
+        # Combine costs: 50% HD similarity + 50% IoU
+        cost_matrix = 0.5 * hd_cost + 0.5 * iou_cost
+
+        return cost_matrix
+
     def associate(
         self,
         detections: torch.Tensor,
@@ -249,7 +318,11 @@ class TrackingHead(nn.Module):
         track_states: List[Dict],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Associate detections to existing tracks using HD similarity.
+        Associate detections to existing tracks using true Hungarian algorithm
+        with combined HD similarity + IoU cost matrix.
+
+        Uses scipy.optimize.linear_sum_assignment for optimal one-to-one matching,
+        replacing the previous greedy sorting approach that produced suboptimal matches.
 
         Args:
             detections: [N_det, state_dim] current detections
@@ -276,37 +349,31 @@ class TrackingHead(nn.Module):
                 torch.arange(N_trk, device=detections.device),
             )
 
-        # Encode detections to HD
-        det_hd = self.vsa_matcher.encode(detection_features)  # [N_det, hd_dim]
-
-        # Get track HD states
-        trk_hd = torch.stack([t["hd_state"] for t in track_states], dim=0)  # [N_trk, hd_dim]
-
-        # HD similarity matrix
-        sim_matrix = self.vsa_matcher.similarity(
-            det_hd.unsqueeze(1),  # [N_det, 1, hd_dim]
-            trk_hd.unsqueeze(0),  # [1, N_trk, hd_dim]
+        # Compute combined cost matrix
+        cost_matrix = self._compute_similarity_matrix(
+            detections, detection_features, track_states
         )  # [N_det, N_trk]
 
-        # Hungarian algorithm for optimal assignment
-        # (simplified greedy for now; replace with scipy.optimize.linear_sum_assignment)
+        # Hungarian algorithm via scipy
+        cost_np = cost_matrix.detach().cpu().numpy()
+        det_indices, trk_indices = linear_sum_assignment(cost_np)
+
+        # Apply similarity threshold to filter poor matches
         matched_indices = []
         used_dets = set()
         used_trks = set()
 
-        # Sort by similarity
-        flat_idx = torch.argsort(sim_matrix.flatten(), descending=True)
-        det_idx = flat_idx // N_trk
-        trk_idx = flat_idx % N_trk
+        for d, t in zip(det_indices, trk_indices):
+            # Accept match if combined cost is below threshold
+            # (cost of 0.7 corresponds to average similarity of 0.3)
+            if cost_np[d, t] < 0.7:
+                matched_indices.append([d, t])
+                used_dets.add(d)
+                used_trks.add(t)
 
-        for d, t in zip(det_idx.tolist(), trk_idx.tolist()):
-            if d not in used_dets and t not in used_trks:
-                if sim_matrix[d, t] > 0.3:  # Similarity threshold
-                    matched_indices.append([d, t])
-                    used_dets.add(d)
-                    used_trks.add(t)
-
-        matched = torch.tensor(matched_indices, dtype=torch.long, device=detections.device)
+        matched = torch.tensor(matched_indices, dtype=torch.long, device=detections.device) if matched_indices else torch.zeros(
+            0, 2, dtype=torch.long, device=detections.device
+        )
         unmatched_dets = torch.tensor(
             [d for d in range(N_det) if d not in used_dets],
             dtype=torch.long, device=detections.device,
@@ -348,14 +415,17 @@ class TrackingHead(nn.Module):
         # Update matched tracks
         for d_idx, t_idx in matches:
             d_idx, t_idx = d_idx.item(), t_idx.item()
+            if t_idx >= len(tracks):
+                continue
             track = tracks[t_idx]
 
             # HD Kalman update
-            det_hd = self.vsa_matcher.encode(detection_features[d_idx : d_idx + 1])
-            posterior_hd, _ = self.hd_kalman(track["hd_state"].unsqueeze(0), det_hd)
-            track["hd_state"] = posterior_hd.squeeze(0)
+            if d_idx < detection_features.shape[0]:
+                det_hd = self.vsa_matcher.encode(detection_features[d_idx : d_idx + 1])
+                posterior_hd, _ = self.hd_kalman(track["hd_state"].unsqueeze(0), det_hd)
+                track["hd_state"] = posterior_hd.squeeze(0)
 
-            # Update state
+            # Update state with EMA
             track["state"] = (
                 0.7 * track["state"] + 0.3 * detections[d_idx]
             )
@@ -369,28 +439,42 @@ class TrackingHead(nn.Module):
         # Add new tracks for unmatched detections
         for d_idx in unmatched_dets:
             d_idx = d_idx.item()
-            det_hd = self.vsa_matcher.encode(detection_features[d_idx : d_idx + 1])
+            if d_idx < detection_features.shape[0]:
+                det_hd = self.vsa_matcher.encode(detection_features[d_idx : d_idx + 1])
+            else:
+                det_hd = self.vsa_matcher.encode(detection_features[:1])
             _, pred_hd = self.hd_kalman(det_hd)
+
+            if d_idx < detections.shape[0]:
+                state = detections[d_idx].clone()
+                vel = detections[d_idx, 4:7].clone() if detections.shape[1] >= 7 else torch.zeros(3, device=device)
+                traj = [detections[d_idx, :3].clone()]
+            else:
+                state = detections[0].clone()
+                vel = torch.zeros(3, device=device)
+                traj = [detections[0, :3].clone()]
 
             tracks.append({
                 "id": self.next_id.item(),
-                "state": detections[d_idx].clone(),
+                "state": state,
                 "hd_state": pred_hd.squeeze(0),
-                "features": detection_features[d_idx].clone(),
+                "features": detection_features[d_idx].clone() if d_idx < detection_features.shape[0] else detection_features[0].clone(),
                 "hits": 1,
                 "age": 0,
                 "last_frame": frame_id,
-                "velocity": detections[d_idx, 4:7].clone() if detections.shape[1] >= 7 else torch.zeros(3, device=device),
-                "trajectory": [detections[d_idx, :3].clone()],
+                "velocity": vel,
+                "trajectory": traj,
             })
             self.next_id += 1
 
-        # Update age for unmatched tracks
+        # Update age for unmatched tracks and predict forward
         for t_idx in unmatched_trks:
             t_idx = t_idx.item()
+            if t_idx >= len(tracks):
+                continue
             track = tracks[t_idx]
             track["age"] += 1
-            # Predict forward
+            # Predict forward using HD Kalman
             track["hd_state"], _ = self.hd_kalman(track["hd_state"].unsqueeze(0))
             track["hd_state"] = track["hd_state"].squeeze(0)
 
@@ -426,7 +510,6 @@ class TrackingHead(nn.Module):
         # Extract appearance features
         app_features = self.extract_appearance(features_for_reid)
 
-        # Associate
         # Build detection state
         if detections.shape[1] < self.state_dim:
             padding = torch.zeros(

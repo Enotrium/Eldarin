@@ -11,12 +11,15 @@ import torch
 import torch.nn as nn
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, Tuple
 import os
 import time
 from pathlib import Path
 from tqdm import tqdm
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Trainer:
@@ -149,7 +152,13 @@ class Trainer:
                 losses = self.loss_fn(predictions, batch.get("targets", {}))
 
             # Backward
-            self.scaler.scale(losses["total"]).backward()
+            total_loss = losses.get("total")
+            if total_loss is None or not torch.isfinite(total_loss):
+                logger.warning(f"Non-finite loss at batch {batch_idx}, skipping")
+                self.optimizer.zero_grad()
+                continue
+
+            self.scaler.scale(total_loss).backward()
 
             # Gradient clipping
             self.scaler.unscale_(self.optimizer)
@@ -162,13 +171,13 @@ class Trainer:
 
             # Accumulate losses
             for k, v in losses.items():
-                if v.requires_grad:
+                if k == "total":
                     epoch_losses[k] = epoch_losses.get(k, 0) + v.item()
 
             # Update progress bar
-            total = losses["total"].item() if "total" in losses else 0
+            batch_total = total_loss.item()
             pbar.set_postfix({
-                "loss": f"{total:.4f}",
+                "loss": f"{batch_total:.4f}",
                 "lr": f"{self.optimizer.param_groups[0]['lr']:.6f}",
             })
 
@@ -201,7 +210,7 @@ class Trainer:
                 losses = self.loss_fn(predictions, batch.get("targets", {}))
 
             for k, v in losses.items():
-                if v.requires_grad:
+                if k == "total":
                     val_losses[k] = val_losses.get(k, 0) + v.item()
 
         for k in val_losses:
@@ -222,11 +231,11 @@ class Trainer:
 
         self.model.to(self.device)
 
-        print(f"Starting training: {self.epochs} epochs on {self.device}")
-        print(f"Model parameters: {sum(p.numel() for p in self.model.parameters()) / 1e6:.2f}M")
-        print(f"Training samples: {len(self.train_loader.dataset)}")
+        logger.info(f"Starting training: {self.epochs} epochs on {self.device}")
+        logger.info(f"Model parameters: {sum(p.numel() for p in self.model.parameters()) / 1e6:.2f}M")
+        logger.info(f"Training samples: {len(self.train_loader.dataset)}")
         if self.val_loader:
-            print(f"Validation samples: {len(self.val_loader.dataset)}")
+            logger.info(f"Validation samples: {len(self.val_loader.dataset)}")
 
         for epoch in range(self.current_epoch, self.epochs):
             self.current_epoch = epoch
@@ -249,7 +258,7 @@ class Trainer:
             log_str = f"Epoch {epoch + 1}/{self.epochs} | Time: {elapsed:.1f}s | Train Loss: {train_losses.get('total', 0):.4f}"
             if val_losses:
                 log_str += f" | Val Loss: {val_losses.get('total', 0):.4f}"
-            print(log_str)
+            logger.info(log_str)
 
             if self.use_wandb:
                 import wandb
@@ -269,9 +278,9 @@ class Trainer:
             if current_loss < self.best_loss:
                 self.best_loss = current_loss
                 self.save_checkpoint("best_model.pth")
-                print(f"  -> Best model saved (loss: {current_loss:.4f})")
+                logger.info(f"  -> Best model saved (loss: {current_loss:.4f})")
 
-        print(f"Training complete! Best loss: {self.best_loss:.4f}")
+        logger.info(f"Training complete! Best loss: {self.best_loss:.4f}")
         self.save_checkpoint("last_model.pth")
 
     def save_checkpoint(self, filename: str):
@@ -287,7 +296,7 @@ class Trainer:
 
         path = self.output_dir / filename
         torch.save(checkpoint, path)
-        print(f"Checkpoint saved: {path}")
+        logger.info(f"Checkpoint saved: {path}")
 
     def load_checkpoint(self, path: str):
         """Load model checkpoint."""
@@ -297,19 +306,44 @@ class Trainer:
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.current_epoch = checkpoint.get("epoch", 0)
         self.best_loss = checkpoint.get("best_loss", float("inf"))
-        print(f"Loaded checkpoint from {path} (epoch {self.current_epoch})")
+        logger.info(f"Loaded checkpoint from {path} (epoch {self.current_epoch})")
 
-    def _to_device(self, batch: Dict) -> Dict:
-        """Move batch to device, handling nested structures."""
+    def _to_device(self, batch) -> Dict:
+        """
+        Move batch to device, handling nested structures.
+
+        Uses iterative approach to avoid infinite recursion on
+        deeply-nested structures such as event tuples (x, y, t, p)
+        which must be preserved as tuples of tensors.
+        """
+        # Handle dicts
         if isinstance(batch, dict):
-            return {
-                k: self._to_device(v) if isinstance(v, (dict, list, tuple)) else v.to(self.device) if isinstance(v, torch.Tensor) else v
-                for k, v in batch.items()
-            }
-        elif isinstance(batch, list):
-            return [self._to_device(b) for b in batch]
-        elif isinstance(batch, tuple):
-            return tuple(self._to_device(b) for b in batch)
+            return {k: self._to_device(v) for k, v in batch.items()}
+
+        # Handle lists (non-recursive for tensors list)
+        if isinstance(batch, list):
+            return [
+                self._to_device(b) if isinstance(b, (dict, tuple))
+                else b.to(self.device) if isinstance(b, torch.Tensor)
+                else b
+                for b in batch
+            ]
+
+        # Handle tuples — preserve structure, move inner tensors
+        # Event data tuples like (x, y, t, p) must stay as tuples
+        if isinstance(batch, tuple):
+            return tuple(
+                self._to_device(b) if isinstance(b, (dict, list))
+                else b.to(self.device) if isinstance(b, torch.Tensor)
+                else b
+                for b in batch
+            )
+
+        # Handle individual tensors
+        if isinstance(batch, torch.Tensor):
+            return batch.to(self.device)
+
+        # Passthrough for everything else (strings, None, numbers)
         return batch
 
     def export_onnx(self, output_path: str, input_shape: Tuple = (1, 3, 640, 640)):
@@ -329,4 +363,4 @@ class Trainer:
             },
             opset_version=14,
         )
-        print(f"ONNX model exported to {output_path}")
+        logger.info(f"ONNX model exported to {output_path}")

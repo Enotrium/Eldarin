@@ -23,6 +23,7 @@ import numpy as np
 import cv2
 import sys
 import time
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -33,6 +34,8 @@ from utils.visualization import draw_detections, draw_tracks, plot_trajectories,
 from utils.event_utils import EventProcessor, load_events_from_file
 from utils.metrics import box_iou
 
+logger = logging.getLogger(__name__)
+
 
 class EldarinInference:
     """
@@ -41,7 +44,7 @@ class EldarinInference:
       - Model loading and device management
       - Multi-modal input processing (RGB, event, audio, IMU)
       - Detection post-processing (NMS)
-      - 4D tracking (HD Kalman filter)
+      - 4D tracking via model's built-in TrackingHead (HD Kalman filter)
       - Visualization
     """
 
@@ -60,7 +63,7 @@ class EldarinInference:
         self.max_det = max_det
 
         # Load model
-        print(f"Loading checkpoint: {checkpoint_path}")
+        logger.info(f"Loading checkpoint: {checkpoint_path}")
         if config_path:
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
@@ -76,8 +79,9 @@ class EldarinInference:
         # Class names
         self.class_names = VISDRONE_CLASSES
 
-        # Tracking state
-        self.tracks = []
+        # Delegate tracking to the model's built-in TrackingHead
+        # This uses the HD Kalman filter + Hungarian association (fixed)
+        self._tracks = []  # Mirror of TrackingHead tracks for visualization
         self.frame_id = 0
 
     def preprocess_frame(
@@ -104,7 +108,6 @@ class EldarinInference:
         if not det_out:
             return np.zeros((0, 4)), np.zeros(0, dtype=np.int64), np.zeros(0)
 
-        # Get raw predictions
         bbox_pred = det_out.get("bbox", None)
         cls_pred = det_out.get("cls", None)
         obj_pred = det_out.get("obj", None)
@@ -112,41 +115,54 @@ class EldarinInference:
         if bbox_pred is None or bbox_pred.numel() == 0:
             return np.zeros((0, 4)), np.zeros(0, dtype=np.int64), np.zeros(0)
 
-        # Sigmoid/softmax for confidence
-        if obj_pred is not None:
+        # Compute confidence
+        if obj_pred is not None and obj_pred.numel() > 0:
             conf = torch.sigmoid(obj_pred.squeeze(-1))
         else:
-            conf = torch.ones(bbox_pred.shape[0], 1)
+            conf = torch.ones(bbox_pred.shape[0], 1, device=bbox_pred.device)
 
-        if cls_pred is not None:
-            cls_conf, cls_ids = cls_pred.squeeze(0).softmax(-1).max(-1)
-            conf = conf * cls_conf.unsqueeze(-1)
+        cls_ids_out = np.zeros(0, dtype=np.int64)
+        if cls_pred is not None and cls_pred.numel() > 0:
+            cls_flat = cls_pred.reshape(-1, cls_pred.shape[-1])
+            cls_conf, cls_ids = cls_flat.softmax(-1).max(-1)
+            if conf.numel() == cls_conf.numel():
+                conf = conf * cls_conf.unsqueeze(-1) if conf.dim() < 2 else conf.squeeze(-1) * cls_conf
 
-        conf = conf.squeeze(-1).cpu().numpy() if conf.dim() > 1 else conf.cpu().numpy()
+        conf_np = conf.cpu().numpy().flatten() if torch.is_tensor(conf) else np.array(conf)
 
         # Filter by confidence
-        mask = conf > self.conf_thresh
-        boxes = bbox_pred.squeeze(0).cpu().numpy()
-        if len(mask) > 0:
-            boxes = boxes[mask]
-            conf = conf[mask]
-            cls_ids_out = cls_ids[mask].cpu().numpy() if cls_pred is not None else np.zeros(len(boxes), dtype=np.int64)
-        else:
+        mask = conf_np > self.conf_thresh
+        boxes_raw = bbox_pred.reshape(-1, 4).cpu().numpy()
+
+        if mask.sum() == 0:
             return np.zeros((0, 4)), np.zeros(0, dtype=np.int64), np.zeros(0)
 
+        boxes = boxes_raw[mask]
+        conf_filtered = conf_np[mask]
+
+        if cls_pred is not None and cls_pred.numel() > 0:
+            cls_flat = cls_pred.reshape(-1, cls_pred.shape[-1])
+            if cls_flat.shape[0] == len(mask):
+                _, cls_ids = cls_flat.softmax(-1).max(-1)
+                cls_ids_out = cls_ids[mask].cpu().numpy()
+            else:
+                cls_ids_out = np.zeros(boxes.shape[0], dtype=np.int64)
+
         # Rescale to original image size
-        boxes[:, 0] *= orig_size[1]
-        boxes[:, 1] *= orig_size[0]
-        boxes[:, 2] *= orig_size[1]
-        boxes[:, 3] *= orig_size[0]
+        orig_h, orig_w = orig_size
+        boxes[:, [0, 2]] *= orig_w
+        boxes[:, [1, 3]] *= orig_h
 
         # NMS
-        keep = self._nms(boxes, conf)
-        boxes = boxes[keep]
-        conf = conf[keep]
-        cls_ids_out = cls_ids_out[keep][:self.max_det] if keep.size > 0 else np.zeros(0, dtype=np.int64)
+        keep = self._nms(boxes, conf_filtered)
+        if len(keep) == 0:
+            return np.zeros((0, 4)), np.zeros(0, dtype=np.int64), np.zeros(0)
 
-        return boxes[:self.max_det], cls_ids_out[:self.max_det], conf[:self.max_det]
+        boxes = boxes[keep][:self.max_det]
+        conf_filtered = conf_filtered[keep][:self.max_det]
+        cls_ids_out = cls_ids_out[keep][:self.max_det] if len(cls_ids_out) > 0 else np.zeros(boxes.shape[0], dtype=np.int64)
+
+        return boxes, cls_ids_out, conf_filtered
 
     def _nms(self, boxes: np.ndarray, scores: np.ndarray) -> np.ndarray:
         """Non-maximum suppression."""
@@ -187,27 +203,75 @@ class EldarinInference:
         confidences: np.ndarray,
         features: torch.Tensor,
     ):
-        """Update 4D tracking state."""
-        if len(boxes) == 0:
-            # Age existing tracks
-            for track in self.tracks:
-                track["age"] += 1
-            self.tracks = [t for t in self.tracks if t["age"] <= 30]
+        """
+        Update 4D tracking state using the model's built-in TrackingHead
+        with HD Kalman filter and Hungarian association.
+
+        This replaces the previous duplicate IoU-based logic in inference.py
+        that bypassed the HD Kalman filter entirely.
+        """
+        if not hasattr(self.model, 'tracking_head') or self.model.tracking_head is None:
+            # Fallback: simple IoU-based tracking if model doesn't have tracking head
+            self._update_tracking_fallback(boxes, class_ids, confidences)
             return
 
-        # Simple IoU-based tracking (HD Kalman integrated in TrackingHead)
-        det_states = []
+        # Convert boxes to detections tensor for TrackingHead
+        if len(boxes) == 0:
+            # Just age tracks through the tracking head
+            det_state = torch.zeros(0, 8, device=self.device)
+            det_features = torch.zeros(0, 128, device=self.device)
+        else:
+            det_state = np.zeros((len(boxes), 8), dtype=np.float32)
+            for i in range(len(boxes)):
+                x1, y1, x2, y2 = boxes[i]
+                w, h = x2 - x1, y2 - y1
+                cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                det_state[i] = [cx, cy, w, h, 0, 0, 0, 0]
+
+            det_state = torch.from_numpy(det_state).to(self.device)
+
+            # Use provided features for ReID, fall back to zeros
+            if features.numel() > 0:
+                n_feat = min(features.shape[0], len(boxes))
+                det_features = torch.zeros(len(boxes), 128, device=self.device)
+                det_features[:n_feat] = features[:n_feat]
+            else:
+                det_features = torch.zeros(len(boxes), 128, device=self.device)
+
+        # Delegate to TrackingHead (uses Hungarian + HD Kalman)
+        with torch.no_grad():
+            tracking_output = self.model.tracking_head(
+                detections=det_state,
+                detection_features=det_features,
+                features_for_reid=det_features,
+                tracks=self._tracks,
+                frame_id=self.frame_id,
+            )
+
+        self._tracks = tracking_output["tracks"]
+
+    def _update_tracking_fallback(
+        self,
+        boxes: np.ndarray,
+        class_ids: np.ndarray,
+        confidences: np.ndarray,
+    ):
+        """Fallback IoU-based tracking when TrackingHead is not available."""
+        if len(boxes) == 0:
+            for track in self._tracks:
+                track["age"] += 1
+            self._tracks = [t for t in self._tracks if t["age"] <= 30]
+            return
+
+        det_states = np.zeros((len(boxes), 8), dtype=np.float32)
         for i in range(len(boxes)):
             x1, y1, x2, y2 = boxes[i]
             w, h = x2 - x1, y2 - y1
             cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-            det_states.append(np.array([cx, cy, w, h, 0, 0, 0, 0], dtype=np.float32))  # Simplified state
+            det_states[i] = [cx, cy, w, h, 0, 0, 0, 0]
 
-        det_states = np.array(det_states)
-
-        # Associate with existing tracks
-        if self.tracks:
-            track_boxes = np.array([t["state"][:4] for t in self.tracks])
+        if self._tracks:
+            track_boxes = np.array([t["state"][:4] for t in self._tracks])
             iou_matrix = box_iou(
                 torch.from_numpy(det_states[:, :4]),
                 torch.from_numpy(track_boxes)
@@ -218,20 +282,18 @@ class EldarinInference:
                 if iou_matrix.shape[1] > 0:
                     best_t = iou_matrix[d_idx].argmax()
                     if iou_matrix[d_idx, best_t] > 0.3:
-                        self.tracks[best_t]["state"] = (
-                            0.7 * self.tracks[best_t]["state"] + 0.3 * det_states[d_idx]
+                        self._tracks[best_t]["state"] = (
+                            0.7 * self._tracks[best_t]["state"] + 0.3 * det_states[d_idx]
                         )
-                        self.tracks[best_t]["age"] = 0
-                        self.tracks[best_t]["hits"] += 1
-                        if "trajectory" in self.tracks[best_t]:
-                            self.tracks[best_t]["trajectory"].append(det_states[d_idx][:2])
+                        self._tracks[best_t]["age"] = 0
+                        self._tracks[best_t]["hits"] += 1
+                        self._tracks[best_t].setdefault("trajectory", []).append(det_states[d_idx][:2])
                         matched.add(d_idx)
 
-            # Add unmatched as new tracks
             for d_idx in range(len(det_states)):
                 if d_idx not in matched:
-                    self.tracks.append({
-                        "id": self.frame_id * 1000 + len(self.tracks),
+                    self._tracks.append({
+                        "id": self.frame_id * 1000 + len(self._tracks),
                         "state": det_states[d_idx],
                         "age": 0,
                         "hits": 1,
@@ -239,14 +301,12 @@ class EldarinInference:
                         "cls": class_ids[d_idx] if d_idx < len(class_ids) else 0,
                     })
 
-            # Age unmatched
-            for t_idx, track in enumerate(self.tracks):
-                if track["age"] == 0:
-                    continue
-                track["age"] += 1
+            for track in self._tracks:
+                if track.get("age", 0) > 0:
+                    track["age"] += 1 if "age" in track else 1
         else:
             for d_idx in range(len(det_states)):
-                self.tracks.append({
+                self._tracks.append({
                     "id": self.frame_id * 1000 + d_idx,
                     "state": det_states[d_idx],
                     "age": 0,
@@ -255,8 +315,7 @@ class EldarinInference:
                     "cls": class_ids[d_idx] if d_idx < len(class_ids) else 0,
                 })
 
-        # Remove old tracks
-        self.tracks = [t for t in self.tracks if t["age"] <= 30]
+        self._tracks = [t for t in self._tracks if t.get("age", 0) <= 30]
 
     def process_frame(
         self,
@@ -285,9 +344,14 @@ class EldarinInference:
         )
 
         # Extract features for tracking
-        features = predictions.get("fused_features", torch.zeros(1, 256)).mean(dim=[-2, -1])
+        features = predictions.get("fused_features", torch.zeros(1, 256))
+        if features.dim() == 4:
+            # Average over spatial dims: [B, C, H, W] -> [B, C]
+            features = features.mean(dim=[-2, -1])
+        elif features.dim() == 3:
+            features = features.mean(dim=1)
 
-        # Update tracking
+        # Update tracking via model's TrackingHead
         self.update_tracking(boxes, class_ids, confidences, features)
         self.frame_id += 1
 
@@ -295,14 +359,13 @@ class EldarinInference:
             "boxes": boxes,
             "class_ids": class_ids,
             "confidences": confidences,
-            "tracks": self.tracks,
+            "tracks": self._tracks,
         }
 
         # Visualization
         if visualize:
             vis_frame = draw_detections(frame, boxes, class_ids, confidences, self.class_names)
-            # Overlay tracks if available
-            active_tracks = [t for t in self.tracks if t["age"] == 0 and t["hits"] >= 3]
+            active_tracks = [t for t in self._tracks if t.get("age", 0) == 0 and t.get("hits", 0) >= 3]
             if active_tracks:
                 vis_frame = draw_tracks(vis_frame, active_tracks, self.class_names)
             result["visualization"] = vis_frame
@@ -326,7 +389,7 @@ class EldarinInference:
         H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        print(f"Processing video: {W}x{H} @ {fps:.0f}fps, {total_frames} frames")
+        logger.info(f"Processing video: {W}x{H} @ {fps:.0f}fps, {total_frames} frames")
 
         writer = None
         if output_path:
@@ -354,7 +417,7 @@ class EldarinInference:
             cv2.putText(vis_frame, fps_str, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
             # Track count
-            n_tracks = len([t for t in result["tracks"] if t["age"] == 0 and t["hits"] >= 3])
+            n_tracks = len([t for t in result["tracks"] if t.get("age", 0) == 0 and t.get("hits", 0) >= 3])
             cv2.putText(vis_frame, f"Tracks: {n_tracks}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
             if writer:
@@ -368,7 +431,7 @@ class EldarinInference:
             frame_count += 1
             if frame_count % 100 == 0:
                 avg_fps = 1.0 / max(np.mean(processing_times[-100:]), 0.001)
-                print(f"Frame {frame_count}/{total_frames} | Avg FPS: {avg_fps:.1f} | Tracks: {n_tracks}")
+                logger.info(f"Frame {frame_count}/{total_frames} | Avg FPS: {avg_fps:.1f} | Tracks: {n_tracks}")
 
             # Periodic trajectory plot
             if trail_plot_every > 0 and frame_count % trail_plot_every == 0 and output_path:
@@ -384,14 +447,14 @@ class EldarinInference:
             cv2.destroyAllWindows()
 
         avg_fps = 1.0 / max(np.mean(processing_times), 0.001)
-        print(f"\nDone! Processed {frame_count} frames in {np.sum(processing_times):.1f}s")
-        print(f"Average FPS: {avg_fps:.1f}")
+        logger.info(f"\nDone! Processed {frame_count} frames in {np.sum(processing_times):.1f}s")
+        logger.info(f"Average FPS: {avg_fps:.1f}")
 
     def reset_tracks(self):
         """Reset tracking state."""
-        self.tracks = []
+        self._tracks = []
         self.frame_id = 0
-        if hasattr(self.model, 'tracking_head'):
+        if hasattr(self.model, 'tracking_head') and self.model.tracking_head is not None:
             self.model.tracking_head.reset()
 
 
@@ -426,4 +489,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     main()

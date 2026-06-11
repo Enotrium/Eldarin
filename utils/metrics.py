@@ -8,12 +8,14 @@ Computes standard UAV detection and tracking metrics:
 
 Based on COCO eval and MOTChallenge metrics.
 
+
 """
 
 import torch
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
+from scipy.optimize import linear_sum_assignment
 
 
 class DetectionMetrics:
@@ -31,8 +33,8 @@ class DetectionMetrics:
         self.reset()
 
     def reset(self):
-        self.detections = []  # List of per-image detections
-        self.ground_truths = []  # List of per-image ground truths
+        self.detections = []  # List of per-image detections: [N, 6] (x1,y1,x2,y2,conf,cls)
+        self.ground_truths = []  # List of per-image ground truths: [M, 5] (x1,y1,x2,y2,cls)
 
     def update(
         self,
@@ -51,51 +53,119 @@ class DetectionMetrics:
         self.ground_truths.append(targets.cpu().numpy())
 
     def compute(self) -> Dict[str, float]:
-        """Compute mAP and related metrics."""
+        """
+        Compute mAP and related metrics with per-image isolation and
+        proper false-positive tracking.
+
+        Uses 11-point interpolation for AP (standard for VOC-style eval)
+        with per-class computation.
+        """
         if not self.detections:
             return {"mAP": 0.0, "mAP50": 0.0, "precision": 0.0, "recall": 0.0}
 
-        # Simplified AP computation
-        # Full implementation would use pycocotools or custom IoU matching
         aps = []
+        precisions_all = []
+        recalls_all = []
+
         for cls_id in range(self.num_classes):
-            tp = fp = total_gt = 0
-            for dets, gts in zip(self.detections, self.ground_truths):
-                cls_dets = dets[dets[:, 5] == cls_id] if dets.shape[1] > 5 else dets
-                cls_gts = gts[gts[:, 4] == cls_id] if gts.shape[1] > 4 else gts
+            # Collect all detections for this class across all images
+            all_dets = []  # (conf, img_idx, box)
+            all_gts_per_img = []  # list of gt boxes per image for this class
+            total_gt = 0
+
+            for img_idx, (dets, gts) in enumerate(zip(self.detections, self.ground_truths)):
+                # Extract class-specific detections
+                if dets.shape[1] > 5:
+                    cls_mask = dets[:, 5] == cls_id
+                    cls_dets = dets[cls_mask]
+                else:
+                    cls_dets = dets
+
+                for det in cls_dets:
+                    conf = det[4] if det.shape[0] > 4 else 1.0
+                    box = det[:4]
+                    all_dets.append((conf, img_idx, box))
+
+                # Extract class-specific ground truths
+                if gts.shape[1] > 4:
+                    gt_mask = gts[:, 4] == cls_id
+                    cls_gts = gts[gt_mask]
+                else:
+                    cls_gts = gts
+
+                all_gts_per_img.append([gt[:4] for gt in cls_gts])
                 total_gt += len(cls_gts)
 
-                # Sort by confidence
-                if len(cls_dets) > 0:
-                    cls_dets = cls_dets[cls_dets[:, 4].argsort()[::-1]]
-                    for det in cls_dets[:100]:  # Top 100
-                        # Check IoU with any GT
-                        max_iou = 0
-                        if len(cls_gts) > 0:
-                            ious = box_iou(
-                                torch.from_numpy(det[:4]).unsqueeze(0),
-                                torch.from_numpy(cls_gts[:, :4])
-                            )
-                            max_iou = ious.max().item() if ious.numel() > 0 else 0
-                        if max_iou >= self.iou_threshold:
-                            tp += 1
-                        else:
-                            fp += 1
+            if total_gt == 0:
+                continue
 
-            # Compute AP for this class
-            if total_gt > 0:
-                precision = tp / max(tp + fp, 1)
-                recall = tp / total_gt
-                ap = (2 * precision * recall) / (precision + recall + 1e-6)
-                aps.append(ap)
+            # Sort detections by confidence (descending)
+            all_dets.sort(key=lambda x: x[0], reverse=True)
+
+            # Per-image tracking: which GTs have been matched
+            gt_matched = [set() for _ in range(len(self.ground_truths))]
+
+            tp = np.zeros(len(all_dets))
+            fp = np.zeros(len(all_dets))
+
+            for det_idx, (conf, img_idx, det_box) in enumerate(all_dets):
+                if img_idx >= len(all_gts_per_img):
+                    fp[det_idx] = 1.0
+                    continue
+
+                img_gts = all_gts_per_img[img_idx]
+                if not img_gts:
+                    fp[det_idx] = 1.0
+                    continue
+
+                # Compute IoU with all unmatched GTs in this image
+                best_iou = 0.0
+                best_gt_idx = -1
+                for gt_idx, gt_box in enumerate(img_gts):
+                    if gt_idx in gt_matched[img_idx]:
+                        continue
+                    iou = _compute_iou_single(det_box, gt_box)
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_gt_idx = gt_idx
+
+                if best_iou >= self.iou_threshold and best_gt_idx >= 0:
+                    tp[det_idx] = 1.0
+                    gt_matched[img_idx].add(best_gt_idx)
+                else:
+                    fp[det_idx] = 1.0
+
+            # Compute cumulative precision/recall
+            tp_cumsum = np.cumsum(tp)
+            fp_cumsum = np.cumsum(fp)
+
+            recalls = tp_cumsum / max(total_gt, 1)
+            precisions = tp_cumsum / np.maximum(tp_cumsum + fp_cumsum, 1)
+
+            # 11-point interpolation for AP
+            ap = 0.0
+            for t_interp in np.linspace(0, 1, 11):
+                if np.any(recalls >= t_interp):
+                    ap += np.max(precisions[recalls >= t_interp]) / 11.0
+            aps.append(ap)
+
+            # Record per-class precision/recall at best F1 point
+            if len(precisions) > 0:
+                f1_scores = 2 * precisions * recalls / (precisions + recalls + 1e-6)
+                if len(f1_scores) > 0:
+                    best_idx = np.argmax(f1_scores)
+                    precisions_all.append(precisions[best_idx])
+                    recalls_all.append(recalls[best_idx])
 
         mAP = np.mean(aps) * 100 if aps else 0.0
+        precision = np.mean(precisions_all) * 100 if precisions_all else 0.0
+        recall = np.mean(recalls_all) * 100 if recalls_all else 0.0
 
         return {
             "mAP": mAP,
-            "mAP50": mAP,  # Simplified
-            "precision": 0.0,  # Would require full computation
-            "recall": 0.0,
+            "mAP50": mAP,
+            "precision": precision,
+            "recall": recall,
         }
 
 
@@ -104,7 +174,10 @@ class TrackingMetrics:
     Compute multi-object tracking metrics.
     MOTA, MOTP, IDF1, HOTA, and trajectory errors.
 
-    Based on MOTChallenge evaluation protocol.
+    Implements the MOTChallenge evaluation protocol with:
+      - Hungarian matching per frame for detection-to-ground-truth association
+      - Proper ID switch (IDSW) counting through per-GT track-ID tracking
+      - IDF1 computation via identity-level precision/recall
     """
 
     def __init__(
@@ -122,9 +195,12 @@ class TrackingMetrics:
         self.total_matches = 0
         self.total_fp = 0
         self.total_fn = 0
-        self.total_ids = 0  # ID switches
+        self.total_ids = 0  # ID switches (now properly computed)
         self.total_dist = 0  # For MOTP
-        self.all_trajectories = defaultdict(list)
+        # Per-GTID trajectory tracking: maps GT track ID → list of predicted IDs
+        self.gt_to_pred_trajectory = defaultdict(list)
+        # Per-frame ID tracking for IDSW detection
+        self.last_matched_pred_id = {}  # gt_id → last pred_id
 
     def update(
         self,
@@ -148,6 +224,12 @@ class TrackingMetrics:
             gt_boxes = gts.get("boxes", torch.zeros(0, 4))
             gt_ids = gts.get("ids", torch.zeros(0, dtype=torch.long))
 
+            # Ensure pred_boxes has at least 4 columns
+            if pred_boxes.dim() == 2 and pred_boxes.shape[1] >= 4:
+                pred_boxes_4 = pred_boxes[:, :4]
+            else:
+                pred_boxes_4 = pred_boxes
+
             self.total_gt += len(gt_boxes)
 
             if len(pred_boxes) == 0:
@@ -158,25 +240,44 @@ class TrackingMetrics:
                 self.total_fp += len(pred_boxes)
                 continue
 
-            # IoU matrix
-            iou_matrix = box_iou(pred_boxes[:, :4], gt_boxes)
+            # IoU matrix for Hungarian matching
+            iou_matrix = box_iou(pred_boxes_4, gt_boxes)
 
-            # Hungarian assignment
-            matches, unmatched_pred, unmatched_gt = hungarian_matching(iou_matrix, self.iou_threshold)
+            # Hungarian assignment for per-frame matching
+            cost = 1 - iou_matrix.numpy()
+            pred_indices, gt_indices = linear_sum_assignment(cost)
 
-            self.total_matches += len(matches)
-            self.total_fp += len(unmatched_pred)
-            self.total_fn += len(unmatched_gt)
+            matched_pred_ids_set = set()
+            matched_gt_ids_set = set()
 
-            # MOTP: sum of 1-IoU for matches
-            for p_idx, g_idx in matches:
-                self.total_dist += 1 - iou_matrix[p_idx, g_idx].item()
+            for p_idx, g_idx in zip(pred_indices, gt_indices):
+                if iou_matrix[p_idx, g_idx] >= self.iou_threshold:
+                    self.total_matches += 1
+                    self.total_dist += 1 - iou_matrix[p_idx, g_idx].item()
 
-            # Track trajectories for IDF1
-            for p_idx, g_idx in matches:
-                p_id = pred_ids[p_idx].item()
-                g_id = gt_ids[g_idx].item()
-                self.all_trajectories[g_id].append(p_id)
+                    # Get IDs
+                    p_id = int(pred_ids[p_idx].item()) if pred_ids.numel() > p_idx else -1
+                    g_id = int(gt_ids[g_idx].item()) if gt_ids.numel() > g_idx else -1
+
+                    # Track trajectory for IDF1
+                    self.gt_to_pred_trajectory[g_id].append(p_id)
+
+                    # ID switch detection: same GT matched to different predicted ID
+                    if g_id in self.last_matched_pred_id:
+                        if self.last_matched_pred_id[g_id] != p_id and self.last_matched_pred_id[g_id] != -1:
+                            self.total_ids += 1
+                    self.last_matched_pred_id[g_id] = p_id
+
+                    matched_pred_ids_set.add(p_idx)
+                    matched_gt_ids_set.add(g_idx)
+
+            # Unmatched predictions = false positives
+            unmatched_pred = len(pred_boxes) - len(matched_pred_ids_set)
+            self.total_fp += unmatched_pred
+
+            # Unmatched ground truths = false negatives
+            unmatched_gt = len(gt_boxes) - len(matched_gt_ids_set)
+            self.total_fn += unmatched_gt
 
     def compute(self) -> Dict[str, float]:
         """Compute full tracking metrics."""
@@ -186,18 +287,22 @@ class TrackingMetrics:
                 "HOTA": 0.0, "IDSW": 0, "FP": 0, "FN": 0,
             }
 
-        # MOTA
+        # MOTA: 1 - (FP + FN + IDSW) / GT
+        # Note: MOTA can be negative
         mota = 1 - (self.total_fp + self.total_fn + self.total_ids) / max(self.total_gt, 1)
-        mota = max(0, mota * 100)
+        mota = mota * 100  # Percentage
 
-        # MOTP
+        # MOTP: average 1 - IoU over all matches
         motp = (1 - self.total_dist / max(self.total_matches, 1)) * 100
 
-        # IDF1 (simplified)
+        # IDF1: identity-level F1 score
         idf1 = self._compute_idf1()
 
-        # HOTA (simplified)
-        hota = np.sqrt(mota * idf1 / 10000) * 100 if mota > 0 and idf1 > 0 else 0
+        # HOTA: sqrt(DetA * AssA) where DetA ≈ mAP and AssA ≈ association F1
+        detA = (min(self.total_matches, self.total_gt)
+                / max(self.total_gt, 1)) * 100
+        assA = idf1  # Simplified: identity precision/recall mirrors association
+        hota = np.sqrt(detA * assA) if detA > 0 and assA > 0 else 0.0
 
         return {
             "MOTA": mota,
@@ -211,26 +316,72 @@ class TrackingMetrics:
         }
 
     def _compute_idf1(self) -> float:
-        """Compute IDF1 score from trajectory matches."""
-        total_matches = 0
-        total_preds = 0
-        total_gts = 0
+        """
+        Compute IDF1 score from trajectory matches.
 
-        for gt_id, pred_ids in self.all_trajectories.items():
-            total_gts += 1
-            total_preds += len(set(pred_ids))
-            # Count consistent matches
-            most_common = max(set(pred_ids), key=pred_ids.count) if pred_ids else None
-            if most_common is not None:
-                total_matches += 1
-
-        if total_preds == 0 or total_gts == 0:
+        IDF1 measures identity preservation:
+          - For each GT track ID, find the most common predicted ID
+          - IDF1 = 2 * IDP * IDR / (IDP + IDR)
+          where:
+            IDP = num_correctly_identified / total_pred_ids_used
+            IDR = num_correctly_identified / total_gt_ids
+        """
+        if not self.gt_to_pred_trajectory:
             return 0.0
 
-        precision = total_matches / total_preds
-        recall = total_matches / total_gts
-        idf1 = 2 * precision * recall / (precision + recall + 1e-6)
+        # For each GT, determine the best-matching prediction ID
+        id_matches = 0
+        total_pred_ids = set()
+        total_gt_ids = len(self.gt_to_pred_trajectory)
+
+        for gt_id, pred_ids in self.gt_to_pred_trajectory.items():
+            if not pred_ids:
+                continue
+            # Count occurrences of each prediction ID
+            from collections import Counter
+            pred_counter = Counter(pred_ids)
+            most_common_pred_id, count = pred_counter.most_common(1)[0]
+
+            # This GT is "correctly identified" if >50% of its predictions use the same ID
+            if count > len(pred_ids) * 0.5:
+                id_matches += 1
+
+            total_pred_ids.update(set(pred_ids))
+
+        if not total_pred_ids or total_gt_ids == 0:
+            return 0.0
+
+        total_pred_ids_count = len(total_pred_ids)
+
+        # Identity precision and recall
+        id_precision = id_matches / max(total_pred_ids_count, 1)
+        id_recall = id_matches / max(total_gt_ids, 1)
+
+        # IDF1
+        if id_precision + id_recall > 0:
+            idf1 = 2 * id_precision * id_recall / (id_precision + id_recall)
+        else:
+            idf1 = 0.0
+
         return idf1 * 100
+
+
+def _compute_iou_single(box1, box2) -> float:
+    """Compute IoU between two single boxes (x1,y1,x2,y2)."""
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    inter_w = max(0, x2 - x1)
+    inter_h = max(0, y2 - y1)
+    inter = inter_w * inter_h
+
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - inter
+
+    return inter / (union + 1e-6) if union > 0 else 0.0
 
 
 def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
@@ -239,7 +390,8 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     if boxes1.shape[0] == 0 or boxes2.shape[0] == 0:
         return torch.zeros(boxes1.shape[0], boxes2.shape[0])
 
-    # Convert to corner format if needed
+    # Determine format: if width/height are small relative to x1/y1, treat as corner format
+    # Simple heuristic: check if there are negative values (corner format can have any)
     area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
     area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
 
@@ -256,24 +408,36 @@ def hungarian_matching(
     threshold: float,
 ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
     """
-    Greedy Hungarian-style matching (simplified).
-    For full implementation, use scipy.optimize.linear_sum_assignment.
+    Hungarian matching between predictions and targets.
+
+    Uses scipy.optimize.linear_sum_assignment for optimal one-to-one matching.
+
+    Args:
+        cost_matrix: [N, M] cost matrix (lower = better match, e.g., 1 - IoU)
+        threshold: Maximum cost for a valid match
+
+    Returns:
+        matches: List of (pred_idx, gt_idx)
+        unmatched_rows: Indices of unmatched predictions
+        unmatched_cols: Indices of unmatched ground truths
     """
     N, M = cost_matrix.shape
+
+    if N == 0 or M == 0:
+        return [], list(range(N)), list(range(M))
+
+    cost_np = cost_matrix.numpy()
+    row_indices, col_indices = linear_sum_assignment(cost_np)
+
     matches = []
     used_rows = set()
     used_cols = set()
 
-    # Flatten and sort by IoU (descending)
-    flat_idx = torch.argsort(cost_matrix.flatten(), descending=True)
-
-    for idx in flat_idx:
-        r, c = idx.item() // M, idx.item() % M
-        if r not in used_rows and c not in used_cols:
-            if cost_matrix[r, c] >= threshold:
-                matches.append((r, c))
-                used_rows.add(r)
-                used_cols.add(c)
+    for r, c in zip(row_indices, col_indices):
+        if cost_matrix[r, c] <= threshold:
+            matches.append((int(r), int(c)))
+            used_rows.add(int(r))
+            used_cols.add(int(c))
 
     unmatched_rows = [i for i in range(N) if i not in used_rows]
     unmatched_cols = [j for j in range(M) if j not in used_cols]

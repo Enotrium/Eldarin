@@ -7,7 +7,6 @@ scipy>=1.10.0
 
 # Computer Vision
 opencv-python>=4.8.0
-opencv-python-headless>=4.8.0
 albumentations>=1.3.0
 Pillow>=10.0.0
 
@@ -22,7 +21,6 @@ natsort>=8.4.0
 
 # Tracking
 motmetrics>=1.4.0
-scipy>=1.10.0
 
 # Visualization
 matplotlib>=3.7.0
@@ -50,3 +48,7 @@ onnxruntime>=1.15.0
 einops>=0.6.0
 timm>=0.9.0
 huggingface-hub>=0.16.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
