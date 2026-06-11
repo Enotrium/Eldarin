@@ -18,15 +18,15 @@ The system is partitioned into **three compute domains** with distinct latency/c
 
 ```
  ┌───────────────────────────────────────────────────────────────────┐
- │                     SENSOR SUITE                                   │
- │  Stereo Event Cameras  │ 6-DoF IMU │ Optical Flow │ IR Lasers    │
+ │                     SENSOR SUITE                                  │
+ │  Stereo Event Cameras  │ 6-DoF IMU │ Optical Flow │ IR Lasers     │
  │  Barometer             │ Payload Sensors                          │
  └───────────────┬───────────────────────────────────┬───────────────┘
                  │                                   │
  ┌───────────────▼──────────┐  ┌─────────────────────▼───────────────┐
  │  FPGA — Neuromorphic     │  │  MCU — Inner Loop (hard real-time)  │
  │  • SNN Feature Tracking  │  │  • Extended Kalman Filter           │
- │  • Event-stream encode   │  │  • LQR Motor Controller            │
+ │  • Event-stream encode   │  │  • LQR Motor Controller             │
  │  • (opt) HV encoding     │  │  • Motor ESC interface              │
  │  Event-driven, sparse    │  │  kHz-rate, flight-critical          │
  └───────────────┬──────────┘  └─────────────────────┬───────────────┘
@@ -36,10 +36,10 @@ The system is partitioned into **three compute domains** with distinct latency/c
  ┌───────────────────────────────────────────────────────────────────┐
  │  Cortex-A — Mission / State Layer (soft real-time, NEON SIMD)     │
  │                                                                   │
- │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐    │
- │  │  HDC-EVIO    │  │  HDC-SLAM    │  │  Path Planning       │    │
- │  │  Ego-motion  │  │  Landmark    │  │  • Waypoint following│    │
- │  │  estimation  │  │  map + loop  │  │  • Coverage patterns │    │
+ │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐     │
+ │  │  HDC-EVIO    │  │  HDC-SLAM    │  │  Path Planning       │     │
+ │  │  Ego-motion  │  │  Landmark    │  │  • Waypoint following│     │
+ │  │  estimation  │  │  map + loop  │  │  • Coverage patterns │    │ 
  │  │  from HD     │  │  closure     │  │  • Payload-adaptive  │    │
  │  │  vectors     │  │              │  │  • Obstacle avoidance│    │
  │  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘    │
@@ -105,59 +105,6 @@ pip install -r requirements.txt
 
 # Optional: SNN framework for FPGA deployment
 pip install snntorch lava-numpy
-```
-
----
-
-## Repository Structure
-
-```
-Eldarin/
-├── README.md                              # This file
-├── neuromorphic-navigation-system-outline.md  # Architecture specification
-├── requirements.txt
-├── main.py                                # Detection/tracking training entry point
-├── main_navigation.py                     # 🆕 Navigation system entry point
-├── inference.py                           # Real-time detection inference (+ VO mode)
-├── config/
-│   ├── navigation.yaml                    # 🆕 Navigation system configuration
-│   ├── base.yaml                          # Base model configuration
-│   ├── train_visdrone.yaml / train_multimodal.yaml / train_event.yaml
-│   ├── inference.yaml
-│   └── fpga_export.yaml
-├── navigation/                            # 🆕 Three-domain navigation stack
-│   ├── __init__.py                        # Public API
-│   ├── messages.py                        # Inter-domain message contracts
-│   ├── system.py                          # System orchestrator (wires all domains)
-│   ├── estimation/
-│   │   ├── ekf.py                         # Extended Kalman Filter (MCU inner loop)
-│   │   └── hdc_evio.py                    # HDC-EVIO — ego-motion estimation (Cortex-A)
-│   ├── slam/
-│   │   └── hdc_slam.py                    # HDC-SLAM — landmark mapping + loop closure
-│   ├── control/
-│   │   ├── lqr.py                         # LQR controller + motor mixing (MCU)
-│   │   └── motor_esc.py                   # Motor ESC interface (MCU)
-│   └── planning/
-│       └── path_planner.py                # Path planner + mission controller (Cortex-A)
-├── model/                                 # Perception / detection / VSA models
-│   ├── __init__.py
-│   ├── eldarin_model.py                   # Main Eldarin detection model
-│   ├── vo.py                              # Visual Odometry (Renner et al. 2024)
-│   ├── fpe.py                             # Fractional Power Encoding
-│   ├── vsa_hdc.py                         # VSA/HDC + Resonator + Hierarchical Resonator
-│   ├── digital_twin.py                    # Digital Twin + Swarm Consensus
-│   ├── encoders/                          # Visual, event, audio, IMU encoders
-│   ├── hierarchy.py / mixing.py           # Hierarchical fusion + Bayesian mixing
-│   ├── heads.py                           # Detection + 4D tracking heads
-│   ├── hdc_classifier.py                  # HDC Classifier + Item Memory
-│   ├── sdm.py                             # Sparse Distributed Memory
-│   └── snn_layers.py                      # SNN-compatible layer definitions
-├── utils/                                 # Data loading, metrics, visualization
-├── datasets/                              # VisDrone, UAVDT, UAV3D, FRED, synthetic
-├── fpga/                                  # FPGA HLS kernels, SNN conversion, export
-├── tests/                                 # Unit tests
-├── figures/ / images/                     # Paper figures (HTML + PNG)
-└── scripts/                               # Dataset prep, figure generation, ablation
 ```
 
 ---
@@ -267,32 +214,6 @@ Implementation notes:
 | 9 | Anchored Map Update | `m̂(t+1) = μ₁·m̂(t) + μ₂·m̂(0) + (1-μ₁-μ₂)·m(t)` |
 | 10 | IMU Fusion | `r̂(t) = r̂(t-1) ⊗ r_seed^{IMU(t)}` |
 
----
-
-## Citations
-
-If you use Eldarin in your research, please cite:
-
-```bibtex
-@article{renner2024visual,
-  title={Visual odometry with neuromorphic resonator networks},
-  author={Renner, Alpha and Supic, Lazar and Danielescu, Andreea and
-          Indiveri, Giacomo and Frady, E Paxon and Sommer, Friedrich T
-          and Sandamirskaya, Yulia},
-  journal={Nature Machine Intelligence},
-  year={2024},
-  doi={10.1038/s42256-024-00848-0}
-}
-```
-
-```bibtex
-@article{yan2026digital,
-  title={Digital twin-driven swarm of autonomous underwater vehicles for marine exploration},
-  author={Yan, Jing and Zhang, Tianyi and Guan, Xinping and Yang, Xian and Chen, Cailian},
-  journal={Communications Engineering}, volume={5}, number={1}, year={2026},
-  publisher={Nature Publishing Group}, doi={10.1038/s44172-025-00571-7}
-}
-```
 
 ---
 
